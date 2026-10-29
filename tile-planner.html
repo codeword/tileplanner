@@ -1,0 +1,1463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Merola Metro Rhombus Installation Planner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        input[type="color"] {
+            -webkit-appearance: none;
+            border: none;
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            cursor: pointer;
+            padding: 0;
+            background: none;
+        }
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-webkit-color-swatch {
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+        }
+        input[type="range"] { accent-color: #38bdf8; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased selection:bg-cyan-500 selection:text-white">
+
+    <!-- Header Navigation -->
+    <header class="border-b border-slate-800 bg-slate-900/70 backdrop-blur sticky top-0 z-40 px-6 py-3.5 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-500 to-indigo-500 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+                <svg class="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                </svg>
+            </div>
+            <div>
+                <h1 class="text-base font-semibold leading-tight text-white flex items-center gap-2">
+                    Merola Metro Rhombus Installation Planner
+                    <span class="text-xs font-normal px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800">10.5″ × 12.13″ Sheet Specs</span>
+                </h1>
+                <p class="text-xs text-slate-400">Physical dimensioning, zero-truncation sheets, procedural fade, & waste takeoff</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <button id="downloadPngBtn" class="px-3 py-1.5 text-xs font-medium bg-emerald-600 hover:bg-emerald-500 text-white rounded-md shadow transition flex items-center gap-1.5">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                </svg>
+                <span>Download PNG</span>
+            </button>
+            <button id="toggleSheetGridBtn" class="px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-md border border-slate-700 transition flex items-center gap-1.5">
+                <input type="checkbox" id="showSheetOverlayCheck" class="rounded border-slate-700 text-cyan-500 focus:ring-0 cursor-pointer">
+                <span>Sheet Overlay</span>
+            </button>
+            <button id="openConfigModalBtn" class="px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-md border border-slate-700 transition flex items-center gap-1.5">
+                <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
+                </svg>
+                <span>Config JSON</span>
+            </button>
+            <button id="randomizeSeedBtn" class="px-3.5 py-1.5 text-xs font-medium bg-cyan-600 hover:bg-cyan-500 text-white rounded-md shadow-sm transition flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                <span>Re-Seed</span>
+            </button>
+            <button id="resetDefaultsBtn" class="px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-md border border-slate-700 transition">
+                Reset
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <div class="flex-1 flex overflow-hidden">
+        
+        <!-- Controls Sidebar -->
+        <aside class="w-96 border-r border-slate-800 bg-slate-900/50 p-5 overflow-y-auto space-y-6 text-sm flex-shrink-0">
+            
+            <!-- Wall Physical Dimensions -->
+            <div class="space-y-3 bg-slate-900/90 p-4 rounded-xl border border-slate-800">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                        <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
+                        </svg>
+                        Wall Dimensions (Inches)
+                    </h2>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 pt-1">
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">Wall Width (W)</label>
+                        <div class="relative">
+                            <input type="number" id="wallWidthInches" min="12" max="240" step="0.5" class="w-full bg-slate-950 border border-slate-800 rounded-md px-2.5 py-1.5 text-xs font-mono text-cyan-300 focus:outline-none focus:border-cyan-500">
+                            <span class="absolute right-2.5 top-1.5 text-xs text-slate-500 font-mono">in</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">Wall Total Height (H)</label>
+                        <div class="relative">
+                            <input type="number" id="wallTotalHeightInches" min="24" max="240" step="0.5" class="w-full bg-slate-950 border border-slate-800 rounded-md px-2.5 py-1.5 text-xs font-mono text-cyan-300 focus:outline-none focus:border-cyan-500">
+                            <span class="absolute right-2.5 top-1.5 text-xs text-slate-500 font-mono">in</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="flex items-center justify-between text-xs mb-1">
+                        <span class="text-slate-400">Tiled Wall Height</span>
+                        <span id="tiledHeightVal" class="font-mono text-cyan-400 font-semibold">66″</span>
+                    </div>
+                    <input type="range" id="tiledHeightInches" min="12" step="0.5" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer">
+                    <div class="flex justify-between text-[11px] text-slate-500 font-mono mt-0.5">
+                        <span>Floor (0″)</span>
+                        <span id="paintSpanLabel">Paint above 66″ (42″ un-tiled)</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Palette Selection -->
+            <div class="space-y-3 bg-slate-900/90 p-4 rounded-xl border border-slate-800">
+                <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                    <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4 4 4 0 014-4h1a4 4 0 014 4 4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/>
+                    </svg>
+                    Color Specifications
+                </h2>
+
+                <div class="space-y-2.5">
+                    <!-- Color 1 -->
+                    <div class="flex items-center justify-between bg-slate-950 p-2 rounded-lg border border-slate-800">
+                        <div class="flex items-center gap-2.5">
+                            <input type="color" id="colorTile1">
+                            <div>
+                                <div class="text-xs font-medium text-slate-200">Color 1 (Tile 1)</div>
+                                <div id="hexTile1" class="text-[10px] font-mono text-slate-500 uppercase">#121316</div>
+                            </div>
+                        </div>
+                        <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-amber-950/80 text-amber-400 border border-amber-800/50">C1 (Orange)</span>
+                    </div>
+
+                    <!-- Color 2 -->
+                    <div class="flex items-center justify-between bg-slate-950 p-2 rounded-lg border border-slate-800">
+                        <div class="flex items-center gap-2.5">
+                            <input type="color" id="colorTile2">
+                            <div>
+                                <div class="text-xs font-medium text-slate-200">Color 2 (Tile 2)</div>
+                                <div id="hexTile2" class="text-[10px] font-mono text-slate-500 uppercase">#FFFFFF</div>
+                            </div>
+                        </div>
+                        <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-cyan-950/80 text-cyan-400 border border-cyan-800/50">C2 (Blue)</span>
+                    </div>
+
+                    <!-- Wall Paint -->
+                    <div class="flex items-center justify-between bg-slate-950 p-2 rounded-lg border border-slate-800">
+                        <div class="flex items-center gap-2.5">
+                            <input type="color" id="colorPaint">
+                            <div>
+                                <div class="text-xs font-medium text-slate-200">Painted Wall (Drywall)</div>
+                                <div id="hexPaint" class="text-[10px] font-mono text-slate-500 uppercase">#B3FAFF</div>
+                            </div>
+                        </div>
+                        <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-cyan-950/70 text-cyan-400 border border-cyan-800/40">Upper Wall</span>
+                    </div>
+
+                    <!-- Grout Line -->
+                    <div class="flex items-center justify-between bg-slate-950 p-2 rounded-lg border border-slate-800">
+                        <div class="flex items-center gap-2.5">
+                            <input type="color" id="colorGrout">
+                            <div>
+                                <div class="text-xs font-medium text-slate-200">Grout Seam Color</div>
+                                <div id="hexGrout" class="text-[10px] font-mono text-slate-500 uppercase">#333333</div>
+                            </div>
+                        </div>
+                        <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400">1/8″ joint</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tiled Section Sub-Zones -->
+            <div class="space-y-3 bg-slate-900/90 p-4 rounded-xl border border-slate-800">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Tiled Sub-Zones (% of Tiled Area)</h2>
+                    <span class="text-[11px] font-mono text-cyan-400 font-medium">Sum: 100%</span>
+                </div>
+
+                <!-- Live Sub-Zone Bar -->
+                <div class="h-3 w-full bg-slate-950 rounded-full flex overflow-hidden border border-slate-800">
+                    <div id="barFloor" style="width: 83%;" class="bg-indigo-600 transition-all duration-150" title="Color 1 Base"></div>
+                    <div id="barTrans" style="width: 6%;" class="bg-amber-500 transition-all duration-150" title="Transition Fade"></div>
+                    <div id="barWall" style="width: 11%;" class="bg-slate-300 transition-all duration-150" title="Color 2 Base"></div>
+                </div>
+
+                <div class="space-y-3 pt-2">
+                    <!-- Color 1 % -->
+                    <div>
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="text-slate-300 flex items-center gap-1.5">
+                                <span class="w-2 h-2 rounded-full bg-indigo-500 inline-block"></span>
+                                Solid Color 1
+                            </span>
+                            <span id="floorPctVal" class="font-mono text-indigo-400 font-semibold">83%</span>
+                        </div>
+                        <input type="range" id="sliderFloor" min="0" max="95" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer">
+                    </div>
+
+                    <!-- Transition % -->
+                    <div>
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="text-slate-300 flex items-center gap-1.5">
+                                <span class="w-2 h-2 rounded-full bg-amber-500 inline-block"></span>
+                                Transition Zone Width
+                            </span>
+                            <span id="transPctVal" class="font-mono text-amber-400 font-semibold">6%</span>
+                        </div>
+                        <input type="range" id="sliderTrans" min="2" max="60" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer">
+                    </div>
+
+                    <!-- Color 2 % (Derived) -->
+                    <div>
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="text-slate-300 flex items-center gap-1.5">
+                                <span class="w-2 h-2 rounded-full bg-slate-300 inline-block"></span>
+                                Solid Color 2
+                            </span>
+                            <span id="wallPctVal" class="font-mono text-slate-300 font-semibold">11%</span>
+                        </div>
+                        <div class="text-[11px] text-slate-500 font-mono">
+                            Automatically derived: 100% − Color 1% − Trans%
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Transition & Noise Algorithm -->
+            <div class="space-y-3 bg-slate-900/90 p-4 rounded-xl border border-slate-800">
+                <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Corruption Aesthetics</h2>
+
+                <div>
+                    <label class="text-xs text-slate-400 block mb-1.5">Fade Style</label>
+                    <select id="algorithmSelect" class="w-full bg-slate-950 border border-slate-800 rounded-md px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-cyan-500">
+                        <option value="lightning">Jagged Teeth / Lightning (High Contrast)</option>
+                        <option value="bayer">Ordered Matrix Dither (Bayer 4×4)</option>
+                        <option value="cellular">Organic Cellular Clusters</option>
+                        <option value="glitch">Glitch Displacement Scanlines</option>
+                        <option value="blueNoise">High-Frequency Blue Noise Dissolve</option>
+                    </select>
+                </div>
+
+                <div>
+                    <div class="flex justify-between text-xs mb-1">
+                        <span class="text-slate-400">Rogue Noise Outside Zone</span>
+                        <span id="outlierVal" class="font-mono text-cyan-400 font-semibold">6.5%</span>
+                    </div>
+                    <input type="range" id="sliderOutlier" min="0" max="25" step="0.5" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer">
+                    <p class="text-[11px] text-slate-500 mt-1">Stochastically scatters rogue contrasting pixels deep into the Color 1 and Color 2 fields.</p>
+                </div>
+            </div>
+
+            <!-- Multi-Wall Purchasing Planner -->
+            <div class="space-y-3 bg-slate-900/90 p-4 rounded-xl border border-slate-800">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Room Wall Takeoff</h2>
+                    <button id="addWallToTakeoffBtn" class="text-[11px] bg-slate-800 hover:bg-slate-700 text-cyan-400 px-2 py-1 rounded border border-slate-700 transition">
+                        + Save Wall
+                    </button>
+                </div>
+                <div id="savedWallsList" class="space-y-1.5 max-h-36 overflow-y-auto text-xs">
+                    <div class="text-[11px] text-slate-500 italic p-1">No additional walls saved. Click "+ Save Wall" to aggregate multiple bathroom walls into a single carton order.</div>
+                </div>
+            </div>
+
+        </aside>
+
+        <!-- Canvas & Live Dashboard -->
+        <main class="flex-1 flex flex-col bg-slate-950 overflow-hidden relative">
+            
+            <!-- Dynamic Takeoff / Inventory Bar -->
+            <div class="border-b border-slate-800 bg-slate-900/40 px-6 py-2.5 flex items-center justify-between text-xs font-mono">
+                <div class="flex items-center gap-6">
+                    <div>
+                        <span class="text-slate-500">Grid Sheets:</span>
+                        <span id="statTotalSheets" class="text-cyan-400 font-bold ml-1">48</span>
+                        <span class="text-slate-600 ml-0.5">(8 cols × 6 rows)</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-500">Color 1 (C1):</span>
+                        <span id="statC1Sheets" class="text-amber-400 font-bold ml-1">40 sheets</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-500">Color 2 (C2):</span>
+                        <span id="statC2Sheets" class="text-cyan-300 font-bold ml-1">8 sheets</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-500">Hand-Swapped:</span>
+                        <span id="statHandSwaps" class="text-amber-400 font-bold ml-1">28 tiles</span>
+                        <span class="text-slate-400 text-[11px] ml-1">(<span id="statSwappedC1" class="text-amber-400 font-semibold">14</span> C1, <span id="statSwappedC2" class="text-cyan-300 font-semibold">14</span> C2)</span>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-4">
+                    <div class="px-2.5 py-1 rounded bg-slate-800/80 border border-slate-700">
+                        <span class="text-slate-400">Order:</span>
+                        <span id="statCartons" class="text-cyan-300 font-bold ml-1">5 Boxes (50 sheets)</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Canvas Viewport -->
+            <div class="flex-1 overflow-auto p-6 flex items-center justify-center bg-slate-950/90 relative">
+                <div id="canvasWrapper" class="relative shadow-2xl rounded-xl border border-slate-800 bg-slate-900 overflow-hidden flex items-center justify-center">
+                    <canvas id="tileCanvas" class="block cursor-crosshair"></canvas>
+                </div>
+            </div>
+
+            <!-- Bottom Status Footer -->
+            <footer class="border-t border-slate-800 bg-slate-900/60 px-6 py-2 flex items-center justify-between text-[11px] text-slate-400 font-mono">
+                <div class="flex items-center gap-4">
+                    <span><strong class="text-rose-400">Red Dashed Line:</strong> Actual Wall Perimeter</span>
+                    <span><strong class="text-amber-400">Orange Outline:</strong> Color 1 Base Sheet</span>
+                    <span><strong class="text-cyan-400">Blue Outline:</strong> Color 2 Base Sheet</span>
+                </div>
+                <div>Click any rhombus on canvas to manually flip its color</div>
+            </footer>
+        </main>
+    </div>
+
+    <!-- JSON Config Modal -->
+    <div id="configModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl shadow-2xl flex flex-col max-h-[90vh]">
+            <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+                <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+                    <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
+                    </svg>
+                    Installation JSON Configuration
+                </h3>
+                <button id="closeConfigModalBtn" class="text-slate-400 hover:text-white transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            
+            <div class="p-6 flex-1 overflow-y-auto space-y-4">
+                <p class="text-xs text-slate-400">
+                    Copy this JSON payload to backup or share your exact layout, or paste an existing config and click <strong>Apply Config</strong>.
+                </p>
+                <textarea id="configJsonTextarea" class="w-full h-80 bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs font-mono text-cyan-300 focus:outline-none focus:border-cyan-500 select-all"></textarea>
+                <div id="configStatusMsg" class="text-xs font-mono min-h-[1rem]"></div>
+            </div>
+
+            <div class="px-6 py-3.5 border-t border-slate-800 bg-slate-950/50 flex items-center justify-between">
+                <button id="copyJsonBtn" class="px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-md border border-slate-700 transition flex items-center gap-1.5">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/>
+                    </svg>
+                    Copy JSON
+                </button>
+                <div class="flex items-center gap-2">
+                    <button id="cancelModalBtn" class="px-3.5 py-1.5 text-xs font-medium text-slate-400 hover:text-slate-200 transition">
+                        Cancel
+                    </button>
+                    <button id="applyJsonBtn" class="px-4 py-1.5 text-xs font-medium bg-cyan-600 hover:bg-cyan-500 text-white rounded-md shadow transition">
+                        Apply Config & Render
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application Engine -->
+    <script>
+        // --- Manufacturer Constants (Merola Tile Metro Rhombus) ---
+        const SHEET_WIDTH_INCHES = 10.5;   // 3 tumbling cubes wide
+        const SHEET_HEIGHT_INCHES = 12.13; // 4 vertical tiers high (12 cubes / 36 rhombuses)
+        const TILES_PER_SHEET = 36;
+        const TILES_PER_BOX = 10 * TILES_PER_SHEET; // 10 sheets per box
+
+        // 4x4 Bayer Matrix
+        const BAYER_4X4 = [
+            [ 0/16,  8/16,  2/16, 10/16],
+            [12/16,  4/16, 14/16,  6/16],
+            [ 3/16, 11/16,  1/16,  9/16],
+            [15/16,  7/16, 13/16,  5/16]
+        ];
+
+        // Tumbling-block geometry in inches (same math as the px values in renderTiling)
+        const CUBE_DX_INCHES = SHEET_WIDTH_INCHES / 3.0 / 2.0;
+        const CUBE_DY_INCHES = CUBE_DX_INCHES / Math.sqrt(3.0);
+        const TIER_STEP_INCHES = 3.0 * CUBE_DY_INCHES;
+
+        const ALGORITHMS = ['lightning', 'bayer', 'cellular', 'glitch', 'blueNoise'];
+        const CONFIG_VERSION = 2;
+
+        // --- Core Application State ---
+        // Single source of truth for defaults. Controls are filled from state by syncControls().
+        const DEFAULTS = Object.freeze({
+            wallWidthInches: 81,
+            wallTotalHeightInches: 108,
+            tiledHeightInches: 66,
+
+            floorPercent: 83,
+            transPercent: 6,
+
+            outlierPct: 6.5,
+            algorithm: 'lightning',
+            seed: 42891,
+
+            colorTile1: '#121316',
+            colorTile2: '#ffffff',
+            colorPaint: '#b3faff',
+            colorGrout: '#333333',
+
+            showSheetOverlay: true,
+            // Keyed by overrideKey(); value is the color index (0 = C1, 1 = C2)
+            manualOverrides: Object.freeze({})
+        });
+
+        // [min, max] for numeric state. tiledHeightInches is further capped at wallTotalHeightInches.
+        const LIMITS = {
+            wallWidthInches: [12, 240],
+            wallTotalHeightInches: [24, 240],
+            tiledHeightInches: [12, 240],
+            floorPercent: [0, 95],
+            transPercent: [2, 60],
+            outlierPct: [0, 25]
+        };
+
+        const COLOR_KEYS = ['colorTile1', 'colorTile2', 'colorPaint', 'colorGrout'];
+        const HEX_COLOR_RE = /^#[0-9a-f]{6}$/i;
+        const OVERRIDE_KEY_RE = /^-?\d+_f-?\d+_(top|left|right)$/;
+
+        // Tile rows are numbered from the top tile line down, so a row index shifts whenever the
+        // tiled height changes. Overrides are keyed by the tier counted up from the floor instead.
+        function floorRowIndex(globalRow, tiledHeightInches) {
+            const cubeCenterAboveFloor = tiledHeightInches - (globalRow * TIER_STEP_INCHES + CUBE_DY_INCHES);
+            return Math.round(cubeCenterAboveFloor / TIER_STEP_INCHES);
+        }
+
+        function overrideKey(col, floorRow, type) {
+            return `${col}_f${floorRow}_${type}`;
+        }
+
+        function sanitizeOverrides(raw) {
+            const out = {};
+            if (!raw || typeof raw !== 'object') return out;
+            for (const [key, idx] of Object.entries(raw)) {
+                if (OVERRIDE_KEY_RE.test(key) && (idx === 0 || idx === 1)) out[key] = idx;
+            }
+            return out;
+        }
+
+        // Returns a fully valid state. Invalid fields fall back to `prev`; numbers are clamped.
+        function normalizeState(s, prev = DEFAULTS) {
+            const out = {};
+            for (const [key, range] of Object.entries(LIMITS)) {
+                const n = typeof s[key] === 'number' ? s[key] : parseFloat(s[key]);
+                out[key] = Number.isFinite(n) ? Math.min(range[1], Math.max(range[0], n)) : prev[key];
+            }
+            out.tiledHeightInches = Math.min(out.tiledHeightInches, out.wallTotalHeightInches);
+
+            out.algorithm = ALGORITHMS.includes(s.algorithm) ? s.algorithm : prev.algorithm;
+
+            const seed = parseInt(s.seed, 10);
+            out.seed = Number.isFinite(seed) ? seed : prev.seed;
+
+            for (const key of COLOR_KEYS) {
+                out[key] = HEX_COLOR_RE.test(s[key]) ? s[key].toLowerCase() : prev[key];
+            }
+
+            out.showSheetOverlay = Boolean(s.showSheetOverlay);
+            out.manualOverrides = sanitizeOverrides(s.manualOverrides);
+            return out;
+        }
+
+        let state = normalizeState(DEFAULTS);
+        let savedWalls = [];
+
+        function setState(patch) {
+            state = normalizeState({ ...state, ...patch }, state);
+            syncControls();
+            scheduleRender();
+        }
+
+        // DOM Element Cache
+        const canvas = document.getElementById('tileCanvas');
+        const ctx = canvas.getContext('2d');
+        const canvasWrapper = document.getElementById('canvasWrapper');
+
+        const inputWidth = document.getElementById('wallWidthInches');
+        const inputTotalHeight = document.getElementById('wallTotalHeightInches');
+        const sliderTiledHeight = document.getElementById('tiledHeightInches');
+        const tiledHeightVal = document.getElementById('tiledHeightVal');
+        const paintSpanLabel = document.getElementById('paintSpanLabel');
+
+        const sliderFloor = document.getElementById('sliderFloor');
+        const sliderTrans = document.getElementById('sliderTrans');
+        const floorPctVal = document.getElementById('floorPctVal');
+        const transPctVal = document.getElementById('transPctVal');
+        const wallPctVal = document.getElementById('wallPctVal');
+
+        const barFloor = document.getElementById('barFloor');
+        const barTrans = document.getElementById('barTrans');
+        const barWall = document.getElementById('barWall');
+
+        const sliderOutlier = document.getElementById('sliderOutlier');
+        const outlierVal = document.getElementById('outlierVal');
+        const algorithmSelect = document.getElementById('algorithmSelect');
+
+        const inputTile1 = document.getElementById('colorTile1');
+        const inputTile2 = document.getElementById('colorTile2');
+        const inputPaint = document.getElementById('colorPaint');
+        const inputGrout = document.getElementById('colorGrout');
+
+        const hexTile1 = document.getElementById('hexTile1');
+        const hexTile2 = document.getElementById('hexTile2');
+        const hexPaint = document.getElementById('hexPaint');
+        const hexGrout = document.getElementById('hexGrout');
+
+        const statTotalSheets = document.getElementById('statTotalSheets');
+        const statC1Sheets = document.getElementById('statC1Sheets');
+        const statC2Sheets = document.getElementById('statC2Sheets');
+        const statHandSwaps = document.getElementById('statHandSwaps');
+        const statSwappedC1 = document.getElementById('statSwappedC1');
+        const statSwappedC2 = document.getElementById('statSwappedC2');
+        const statCartons = document.getElementById('statCartons');
+
+        const showSheetOverlayCheck = document.getElementById('showSheetOverlayCheck');
+        const configModal = document.getElementById('configModal');
+        const configJsonTextarea = document.getElementById('configJsonTextarea');
+        const configStatusMsg = document.getElementById('configStatusMsg');
+
+        let renderedTiles = [];
+
+        // High-entropy 64-bit Murmur-style integer bit mixer for non-repeating noise
+        function hashScatter(col, row, typeIdx, seed) {
+            let h = (seed ^ Math.imul(col, 0x9e3779b9) ^ Math.imul(row, 0x85ebca6b) ^ Math.imul(typeIdx, 0xc2b2ae35)) >>> 0;
+            h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
+            h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+            h = (h ^ (h >>> 16)) >>> 0;
+            return h / 4294967296;
+        }
+
+        function hash2D(x, y, seed) {
+            let n = Math.imul(x, 374761393) ^ Math.imul(y, 668265263) ^ Math.imul(seed, 3628273133);
+            n = (n ^ (n >> 13)) * 1274126177;
+            return ((n ^ (n >> 16)) >>> 0) / 4294967296;
+        }
+
+        function smoothNoise(x, y, seed) {
+            const i = Math.floor(x);
+            const j = Math.floor(y);
+            const fx = x - i;
+            const fy = y - j;
+            const u = fx * fx * (3 - 2 * fx);
+            const v = fy * fy * (3 - 2 * fy);
+
+            const a = hash2D(i, j, seed);
+            const b = hash2D(i + 1, j, seed);
+            const c = hash2D(i, j + 1, seed);
+            const d = hash2D(i + 1, j + 1, seed);
+
+            return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+        }
+
+        function getNormalizedZones() {
+            let f = state.floorPercent;
+            let t = state.transPercent;
+            if (f + t > 98) {
+                t = 98 - f;
+            }
+            let w = Math.max(0, 100 - f - t);
+            return {
+                floorPct: f,
+                transPct: t,
+                wallPct: w
+            };
+        }
+
+        // Push state into every control and readout. A number input that has focus is left alone
+        // so typing isn't overwritten mid-edit; its 'change' event re-syncs it once editing ends.
+        function syncControls() {
+            const s = state;
+            const setValue = (el, v) => {
+                if (el === document.activeElement && el.type === 'number') return;
+                el.value = v;
+            };
+
+            setValue(inputWidth, s.wallWidthInches);
+            setValue(inputTotalHeight, s.wallTotalHeightInches);
+            sliderTiledHeight.max = s.wallTotalHeightInches;
+            setValue(sliderTiledHeight, s.tiledHeightInches);
+
+            setValue(sliderFloor, s.floorPercent);
+            setValue(sliderTrans, s.transPercent);
+            setValue(sliderOutlier, s.outlierPct);
+            outlierVal.textContent = s.outlierPct.toFixed(1) + '%';
+            algorithmSelect.value = s.algorithm;
+
+            setValue(inputTile1, s.colorTile1);
+            setValue(inputTile2, s.colorTile2);
+            setValue(inputPaint, s.colorPaint);
+            setValue(inputGrout, s.colorGrout);
+            hexTile1.textContent = s.colorTile1.toUpperCase();
+            hexTile2.textContent = s.colorTile2.toUpperCase();
+            hexPaint.textContent = s.colorPaint.toUpperCase();
+            hexGrout.textContent = s.colorGrout.toUpperCase();
+
+            showSheetOverlayCheck.checked = s.showSheetOverlay;
+
+            const zones = getNormalizedZones();
+            floorPctVal.textContent = Math.round(zones.floorPct) + '%';
+            transPctVal.textContent = Math.round(zones.transPct) + '%';
+            wallPctVal.textContent = Math.round(zones.wallPct) + '%';
+
+            barFloor.style.width = zones.floorPct + '%';
+            barTrans.style.width = zones.transPct + '%';
+            barWall.style.width = zones.wallPct + '%';
+
+            tiledHeightVal.textContent = s.tiledHeightInches + '″';
+            const paintH = Math.max(0, s.wallTotalHeightInches - s.tiledHeightInches);
+            paintSpanLabel.textContent = `Paint above ${s.tiledHeightInches}″ (${paintH.toFixed(1)}″ un-tiled)`;
+        }
+
+        // Render Loop
+        let animationFrameId = null;
+        function scheduleRender() {
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            animationFrameId = requestAnimationFrame(renderTiling);
+        }
+
+        function renderTiling() {
+            const zones = getNormalizedZones();
+            const { wallWidthInches, wallTotalHeightInches, tiledHeightInches, outlierPct, showSheetOverlay, manualOverrides } = state;
+            const selectedAlgorithm = state.algorithm;
+            const currentSeed = state.seed;
+
+            // Tiles carry color indices; hex is resolved only when drawing
+            const c1 = state.colorTile1;
+            const c2 = state.colorTile2;
+            const palette = [c1, c2];
+            const cPaint = state.colorPaint;
+            const cGrout = state.colorGrout;
+
+            // Geometry calculations
+            const marginInches = 6.0;
+            const leftOffsetInches = 1.875; // 1 tile + grout offset to envelope left wall edge
+
+            const boundingWidthInches = wallWidthInches + leftOffsetInches + (marginInches * 2);
+            const boundingHeightInches = wallTotalHeightInches + (marginInches * 2);
+
+            // Container sizing
+            const maxDisplayWidth = canvasWrapper.parentElement.clientWidth - 48;
+            const maxDisplayHeight = canvasWrapper.parentElement.clientHeight - 48;
+
+            let scale = Math.min(maxDisplayWidth / boundingWidthInches, maxDisplayHeight / boundingHeightInches);
+            scale = Math.max(4.0, Math.min(18.0, scale));
+
+            const canvasWidth = Math.round(boundingWidthInches * scale);
+            const canvasHeight = Math.round(boundingHeightInches * scale);
+
+            canvas.width = canvasWidth;
+            canvas.height = canvasHeight;
+            canvas.style.width = canvasWidth + 'px';
+            canvas.style.height = canvasHeight + 'px';
+
+            const pxPerInch = scale;
+
+            // Wall coordinate benchmarks
+            const wallLeftX = Math.round((marginInches + leftOffsetInches) * pxPerInch);
+            const wallRightX = Math.round(wallLeftX + (wallWidthInches * pxPerInch));
+            const renderedWallWidth = wallRightX - wallLeftX;
+
+            const wallFloorY = Math.round((marginInches + wallTotalHeightInches) * pxPerInch);
+            const wallCeilingY = Math.round(marginInches * pxPerInch);
+            const renderedTotalHeight = wallFloorY - wallCeilingY;
+
+            const tiledHeightPx = tiledHeightInches * pxPerInch;
+            const tiledTopY = wallFloorY - tiledHeightPx;
+
+            // 1. Fill entire canvas background with painted wall color
+            ctx.fillStyle = cPaint;
+            ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+            // 2. Draw wall drywall fill
+            ctx.fillStyle = cPaint;
+            ctx.fillRect(wallLeftX, wallCeilingY, renderedWallWidth, renderedTotalHeight);
+
+            // Merola isometric rhombus layout
+            // 3 tumbling cubes form 10.5" width
+            const cubeWidthInches = SHEET_WIDTH_INCHES / 3.0; // 3.50"
+            const stepX = cubeWidthInches * pxPerInch;
+            const dx = stepX / 2.0;
+            const dy = dx / Math.sqrt(3.0);
+            const stepY = 3.0 * dy; // 4 tiers = 12.13" sheet height
+
+            const sheetWidthPx = 3 * stepX;
+            const sheetHeightPx = 4 * stepY;
+
+            // Anchor sheets at top tile line and start left margin offset
+            const gridStartX = wallLeftX - (leftOffsetInches * pxPerInch);
+            const gridStartY = tiledTopY;
+
+            const neededSheetCols = Math.ceil((wallWidthInches + leftOffsetInches) / SHEET_WIDTH_INCHES);
+            const neededSheetRows = Math.ceil(tiledHeightInches / SHEET_HEIGHT_INCHES);
+
+            const tileCandidates = [];
+            const sheetManifest = [];
+            renderedTiles = [];
+
+            // Transition vertical ranges
+            const floorSpanPx = (zones.floorPct / 100) * tiledHeightPx;
+            const transSpanPx = Math.max(dy * 2, (zones.transPct / 100) * tiledHeightPx);
+            const transCenterDistFromFloor = floorSpanPx + (transSpanPx * 0.5);
+
+            // Construct 36-tile sheets top-down
+            for (let sRow = 0; sRow < neededSheetRows; sRow++) {
+                const sheetTopY = gridStartY + (sRow * sheetHeightPx);
+                const sheetBottomY = sheetTopY + sheetHeightPx;
+
+                for (let sCol = 0; sCol < neededSheetCols; sCol++) {
+                    const sheetLeftX = gridStartX + (sCol * sheetWidthPx);
+                    const sheetRightX = sheetLeftX + sheetWidthPx;
+
+                    // Exclude sheets that do not intersect wall
+                    const sheetIntersectsWall = (sheetRightX > wallLeftX) && 
+                                                (sheetLeftX < wallRightX) && 
+                                                (sheetBottomY > tiledTopY) && 
+                                                (sheetTopY < wallFloorY);
+
+                    if (!sheetIntersectsWall) continue;
+
+                    const sheetId = sheetManifest.length + 1;
+                    const sheetTiles = [];
+
+                    for (let localR = 0; localR < 4; localR++) {
+                        const globalR = sRow * 4 + localR;
+                        const floorRow = floorRowIndex(globalR, tiledHeightInches);
+                        const cy = sheetTopY + (localR * stepY) + dy;
+
+                        for (let localC = 0; localC < 3; localC++) {
+                            const globalC = sCol * 3 + localC;
+                            // Top row (even globalR) offsets to the right (+dx) relative to the second row
+                            const rowOffset = (globalR % 2 === 0) ? dx : 0;
+                            const cx = sheetLeftX + (localC * stepX) + rowOffset + dx;
+
+                            // 3 Rhombuses forming isometric cube
+                            const topRhomb = {
+                                type: 'top',
+                                centerX: cx,
+                                centerY: cy - dy,
+                                points: [
+                                    { x: cx, y: cy - 2 * dy },
+                                    { x: cx + dx, y: cy - dy },
+                                    { x: cx, y: cy },
+                                    { x: cx - dx, y: cy - dy }
+                                ]
+                            };
+
+                            const leftRhomb = {
+                                type: 'left',
+                                centerX: cx - (dx * 0.5),
+                                centerY: cy + (dy * 0.5),
+                                points: [
+                                    { x: cx - dx, y: cy - dy },
+                                    { x: cx, y: cy },
+                                    { x: cx, y: cy + 2 * dy },
+                                    { x: cx - dx, y: cy + dy }
+                                ]
+                            };
+
+                            const rightRhomb = {
+                                type: 'right',
+                                centerX: cx + (dx * 0.5),
+                                centerY: cy + (dy * 0.5),
+                                points: [
+                                    { x: cx, y: cy },
+                                    { x: cx + dx, y: cy - dy },
+                                    { x: cx + dx, y: cy + dy },
+                                    { x: cx, y: cy + 2 * dy }
+                                ]
+                            };
+
+                            const rhombi = [topRhomb, leftRhomb, rightRhomb];
+
+                            for (const rhomb of rhombi) {
+                                const distAboveFloor = wallFloorY - rhomb.centerY;
+                                const normX = (rhomb.centerX - wallLeftX) / renderedWallWidth;
+                                const normYInTile = Math.max(0, Math.min(1, distAboveFloor / tiledHeightPx));
+
+                                const candidate = {
+                                    ...rhomb,
+                                    sheetId,
+                                    col: globalC,
+                                    row: globalR,
+                                    floorRow,
+                                    localCol: localC,
+                                    normX,
+                                    normY: normYInTile,
+                                    distAboveFloor,
+                                    worldXInches: (rhomb.centerX - wallLeftX) / pxPerInch,
+                                    worldYInches: distAboveFloor / pxPerInch
+                                };
+
+                                tileCandidates.push(candidate);
+                                sheetTiles.push(candidate);
+                            }
+                        }
+                    }
+
+                    sheetManifest.push({
+                        id: sheetId,
+                        sCol,
+                        sRow,
+                        left: sheetLeftX,
+                        top: sheetTopY,
+                        right: sheetRightX,
+                        bottom: sheetBottomY,
+                        tiles: sheetTiles
+                    });
+                }
+            }
+
+            // Procedural Color Assignment
+            tileCandidates.forEach(tile => {
+                // Procedural jagged boundary in transition zone with non-repeating world-space noise octaves
+                const wx = tile.worldXInches;
+                const n1 = smoothNoise(wx * 0.055, 1.3, currentSeed);
+                const n2 = smoothNoise(wx * 0.125, 4.7, currentSeed + 101);
+                const n3 = smoothNoise(wx * 0.280, 8.2, currentSeed + 503);
+                const n4 = smoothNoise(wx * 0.650, 13.9, currentSeed + 919);
+                const displacement = (n1 - 0.5) * 0.50 + (n2 - 0.5) * 0.28 + (n3 - 0.5) * 0.15 + (n4 - 0.5) * 0.07;
+                const boundaryDistFromFloor = transCenterDistFromFloor + displacement * transSpanPx;
+
+                const distToBoundary = tile.distAboveFloor - boundaryDistFromFloor;
+                const halfZone = transSpanPx * 0.5;
+                const isOutsideZone = Math.abs(distToBoundary) > halfZone;
+
+                const typeIdx = tile.type === 'top' ? 1 : tile.type === 'left' ? 2 : 3;
+
+                // Base color index selection: 0 = C1, 1 = C2
+                if (selectedAlgorithm === 'lightning') {
+                    const toothSeed = hashScatter(tile.col, tile.row, typeIdx + 11, currentSeed);
+                    const toothReach = transSpanPx * 0.48;
+
+                    if (distToBoundary < 0) {
+                        tile.baseColorIdx = (distToBoundary > -toothReach && toothSeed < 0.25) ? 1 : 0;
+                    } else {
+                        tile.baseColorIdx = (distToBoundary < toothReach && toothSeed < 0.25) ? 0 : 1;
+                    }
+                } else if (selectedAlgorithm === 'bayer') {
+                    const bayerVal = BAYER_4X4[Math.abs(tile.row) % 4][Math.abs(tile.col) % 4];
+                    const rawGradient = Math.max(0, Math.min(1, 0.5 + distToBoundary / (transSpanPx * 1.05)));
+                    tile.baseColorIdx = (rawGradient > bayerVal) ? 1 : 0;
+                } else if (selectedAlgorithm === 'glitch') {
+                    const rowGlitch = hash2D(tile.row * 97, 13, currentSeed);
+                    const isGlitchRow = rowGlitch > 0.76;
+                    const shiftOffset = isGlitchRow ? (hash2D(tile.row, 71, currentSeed) - 0.5) * 0.55 * transSpanPx : 0;
+                    const effectiveDist = distToBoundary + shiftOffset;
+                    tile.baseColorIdx = (effectiveDist > 0) ? 1 : 0;
+                } else if (selectedAlgorithm === 'cellular') {
+                    const clusterNoise = smoothNoise(tile.worldXInches * 0.18, tile.worldYInches * 0.18, currentSeed + 42);
+                    const effectiveDist = distToBoundary + (clusterNoise - 0.5) * transSpanPx * 0.85;
+                    tile.baseColorIdx = (effectiveDist > 0) ? 1 : 0;
+                } else {
+                    const staticNoise = hashScatter(tile.col, tile.row, typeIdx + 37, currentSeed);
+                    const t = Math.max(0, Math.min(1, 0.5 + distToBoundary / (transSpanPx * 1.05)));
+                    tile.baseColorIdx = (t + (staticNoise - 0.5) * 0.35 > 0.5) ? 1 : 0;
+                }
+
+                // Rogue noise strictly swaps random tiles outside the transition zone
+                if (isOutsideZone && outlierPct > 0) {
+                    const rogueRand = hashScatter(tile.col, tile.row, typeIdx + 79, currentSeed + 9973);
+                    const rogueThreshold = outlierPct / 100.0;
+                    if (rogueRand < rogueThreshold) {
+                        tile.baseColorIdx = (tile.distAboveFloor < boundaryDistFromFloor) ? 1 : 0;
+                    }
+                }
+
+                // Apply manual override if set
+                tile.overrideKey = overrideKey(tile.col, tile.floorRow, tile.type);
+                const override = manualOverrides[tile.overrideKey];
+                tile.colorIdx = (override !== undefined) ? override : tile.baseColorIdx;
+            });
+
+            renderedTiles = tileCandidates;
+
+            // Render Tiles to Canvas
+            ctx.lineJoin = 'round';
+            ctx.lineWidth = Math.max(0.75, scale * (1.0 / 16.0));
+            ctx.strokeStyle = cGrout;
+
+            for (const tile of tileCandidates) {
+                ctx.beginPath();
+                ctx.moveTo(tile.points[0].x, tile.points[0].y);
+                ctx.lineTo(tile.points[1].x, tile.points[1].y);
+                ctx.lineTo(tile.points[2].x, tile.points[2].y);
+                ctx.lineTo(tile.points[3].x, tile.points[3].y);
+                ctx.closePath();
+
+                ctx.fillStyle = palette[tile.colorIdx];
+                ctx.fill();
+                ctx.stroke();
+            }
+
+            // Sheet Inventory Analysis (Majority Rule & Hand-Swapped Tiles)
+            let totalC1MajoritySheets = 0;
+            let totalC2MajoritySheets = 0;
+            let totalHandSwaps = 0;
+            let swappedC1Count = 0; // C1 tiles placed on C2 majority sheets
+            let swappedC2Count = 0; // C2 tiles placed on C1 majority sheets
+
+            sheetManifest.forEach(sheet => {
+                let c1Count = 0;
+                let c2Count = 0;
+
+                sheet.tiles.forEach(t => {
+                    if (t.colorIdx === 0) c1Count++;
+                    else c2Count++;
+                });
+
+                // Default to C1 if equal (18/18)
+                const isC1Majority = (c1Count >= c2Count);
+                if (isC1Majority) {
+                    totalC1MajoritySheets++;
+                    totalHandSwaps += c2Count;
+                    swappedC2Count += c2Count;
+                    sheet.majorityIdx = 0;
+                    sheet.minorityCount = c2Count;
+                    sheet.minorityIdx = 1;
+                } else {
+                    totalC2MajoritySheets++;
+                    totalHandSwaps += c1Count;
+                    swappedC1Count += c1Count;
+                    sheet.majorityIdx = 1;
+                    sheet.minorityCount = c1Count;
+                    sheet.minorityIdx = 0;
+                }
+                sheet.isMixed = (c1Count > 0 && c2Count > 0);
+            });
+
+            // Draw Sheet Outlines if Enabled
+            if (showSheetOverlay) {
+                sheetManifest.forEach(sheet => {
+                    const edgeMap = new Map();
+                    const edgeKey = (p1, p2) => {
+                        const x1 = Math.round(p1.x * 2) / 2;
+                        const y1 = Math.round(p1.y * 2) / 2;
+                        const x2 = Math.round(p2.x * 2) / 2;
+                        const y2 = Math.round(p2.y * 2) / 2;
+                        return (x1 < x2 || (x1 === x2 && y1 < y2))
+                            ? `${x1},${y1}_${x2},${y2}`
+                            : `${x2},${y2}_${x1},${y1}`;
+                    };
+
+                    sheet.tiles.forEach(tile => {
+                        const pts = tile.points;
+                        for (let i = 0; i < pts.length; i++) {
+                            const pA = pts[i];
+                            const pB = pts[(i + 1) % pts.length];
+                            const key = edgeKey(pA, pB);
+                            edgeMap.set(key, (edgeMap.get(key) || 0) + 1);
+                        }
+                    });
+
+                    // Draw the interlocking perimeter
+                    ctx.save();
+                    ctx.lineWidth = 2.2;
+                    // Orange outline for Color 1 base; Blue outline for Color 2 base
+                    const isC1 = (sheet.majorityIdx === 0);
+                    ctx.strokeStyle = isC1 ? '#f59e0b' : '#38bdf8';
+                    ctx.beginPath();
+
+                    sheet.tiles.forEach(tile => {
+                        const pts = tile.points;
+                        for (let i = 0; i < pts.length; i++) {
+                            const pA = pts[i];
+                            const pB = pts[(i + 1) % pts.length];
+                            const key = edgeKey(pA, pB);
+                            if (edgeMap.get(key) === 1) { // Outer edge of sheet
+                                ctx.moveTo(pA.x, pA.y);
+                                ctx.lineTo(pB.x, pB.y);
+                            }
+                        }
+                    });
+                    ctx.stroke();
+
+                    // Sheet center badge
+                    let avgX = 0, avgY = 0;
+                    sheet.tiles.forEach(t => { avgX += t.centerX; avgY += t.centerY; });
+                    const badgeX = avgX / sheet.tiles.length;
+                    const badgeY = avgY / sheet.tiles.length;
+
+                    ctx.fillStyle = isC1 ? 'rgba(245, 158, 11, 0.95)' : 'rgba(14, 165, 233, 0.95)';
+                    ctx.beginPath();
+                    ctx.roundRect(badgeX - 18, badgeY - 10, 36, 20, 4);
+                    ctx.fill();
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+
+                    ctx.fillStyle = '#ffffff';
+                    ctx.font = '600 10px JetBrains Mono, monospace';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('#' + sheet.id, badgeX, badgeY);
+
+                    ctx.restore();
+                });
+            }
+
+            // Red Dashed Lines for Exact Physical Wall Dimensions
+            ctx.save();
+            ctx.strokeStyle = '#ef4444';
+            ctx.lineWidth = 2.5;
+            ctx.setLineDash([8, 6]);
+
+            // Full Wall Boundary Box
+            ctx.strokeRect(wallLeftX, wallCeilingY, renderedWallWidth, renderedTotalHeight);
+
+            // Horizontal Tile-to-Paint Boundary Line
+            ctx.beginPath();
+            ctx.moveTo(wallLeftX, tiledTopY);
+            ctx.lineTo(wallRightX, tiledTopY);
+            ctx.stroke();
+
+            // Red Dimension Labels
+            ctx.fillStyle = '#ef4444';
+            ctx.font = 'bold 11px JetBrains Mono, monospace';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText(`WALL WIDTH: ${wallWidthInches}″`, wallLeftX + 6, wallCeilingY - 6);
+
+            ctx.textAlign = 'right';
+            ctx.fillText(`CEILING: ${wallTotalHeightInches}″`, wallRightX - 6, wallCeilingY - 6);
+
+            ctx.textBaseline = 'top';
+            ctx.fillText(`FLOOR LINE (0″)`, wallRightX - 6, wallFloorY + 6);
+
+            ctx.textAlign = 'left';
+            ctx.fillText(`TILE LINE (${tiledHeightInches}″)`, wallLeftX + 6, tiledTopY + 6);
+            ctx.restore();
+
+            // Render Specification & Takeoff Card Directly in Painted Drywall Area
+            const paintHeightPx = tiledTopY - wallCeilingY;
+            if (paintHeightPx >= 75) {
+                ctx.save();
+                const cardMargin = 16;
+                const cardX = wallLeftX + cardMargin;
+                const cardY = wallCeilingY + cardMargin;
+                const cardW = Math.min(renderedWallWidth - (cardMargin * 2), 480);
+                const cardH = Math.min(paintHeightPx - (cardMargin * 2), 110);
+
+                // Card background and border
+                ctx.fillStyle = 'rgba(15, 23, 42, 0.90)';
+                ctx.beginPath();
+                ctx.roundRect(cardX, cardY, cardW, cardH, 8);
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(56, 189, 248, 0.40)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+
+                // Card header title
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 11px Inter, sans-serif';
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'top';
+                ctx.fillText('INSTALLATION SPECIFICATIONS & MATERIAL TAKEOFF', cardX + 12, cardY + 10);
+
+                // Grid Sheets & Dimensions row
+                ctx.font = '10px JetBrains Mono, monospace';
+                ctx.fillStyle = '#94a3b8';
+                ctx.fillText(`WALL: ${wallWidthInches}″ W × ${wallTotalHeightInches}″ H (Tiled ${tiledHeightInches}″)  |  GRID: ${sheetManifest.length} Sheets (${neededSheetCols}×${neededSheetRows})`, cardX + 12, cardY + 28);
+
+                // Color Swatches & Sheet Counts
+                // Color 1 swatch
+                ctx.fillStyle = c1;
+                ctx.beginPath();
+                ctx.arc(cardX + 18, cardY + 54, 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+
+                ctx.fillStyle = '#f59e0b';
+                ctx.font = 'bold 10px JetBrains Mono, monospace';
+                ctx.fillText(`Color 1: ${totalC1MajoritySheets} Base Sheets`, cardX + 30, cardY + 49);
+
+                // Color 2 swatch
+                ctx.fillStyle = c2;
+                ctx.beginPath();
+                ctx.arc(cardX + 210, cardY + 54, 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+
+                ctx.fillStyle = '#38bdf8';
+                ctx.fillText(`Color 2: ${totalC2MajoritySheets} Base Sheets`, cardX + 222, cardY + 49);
+
+                // Hand-swap details & box order recommendation
+                ctx.fillStyle = '#cbd5e1';
+                ctx.font = '10px JetBrains Mono, monospace';
+                const totalCartonsNeeded = Math.ceil((sheetManifest.length * 1.10) / 10);
+                ctx.fillText(`Hand-Swaps: ${totalHandSwaps} tiles (${swappedC1Count} C1 into C2, ${swappedC2Count} C2 into C1)  |  Order: ${totalCartonsNeeded} Boxes`, cardX + 12, cardY + 74);
+
+                ctx.restore();
+            }
+
+            // Update Takeoff Dashboard Bar
+            const totalSheets = sheetManifest.length;
+            statTotalSheets.textContent = totalSheets;
+            statC1Sheets.textContent = `${totalC1MajoritySheets} sheets`;
+            statC2Sheets.textContent = `${totalC2MajoritySheets} sheets`;
+            statHandSwaps.textContent = `${totalHandSwaps} tiles`;
+            if (statSwappedC1) statSwappedC1.textContent = swappedC1Count;
+            if (statSwappedC2) statSwappedC2.textContent = swappedC2Count;
+
+            // Boxes to order with 10% standard waste
+            const wasteFactor = 1.10;
+            const boxesNeeded = Math.ceil((totalSheets * wasteFactor) / 10);
+            statCartons.textContent = `${boxesNeeded} Boxes (${boxesNeeded * 10} sheets)`;
+        }
+
+        // --- Export Canvas as High-Res PNG ---
+        function downloadCanvasPNG() {
+            try {
+                const link = document.createElement('a');
+                link.download = `tile-installation-plan-${state.wallWidthInches}x${state.wallTotalHeightInches}-seed${state.seed}.png`;
+                link.href = canvas.toDataURL('image/png');
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            } catch (err) {
+                console.error('Error generating PNG:', err);
+            }
+        }
+
+        // --- Event Listeners & Interactive Handlers ---
+
+        function bindInputs() {
+            // Numeric fields: ignore unparseable text (e.g. an empty field mid-edit) instead of
+            // snapping to a default; re-sync the clamped value when editing ends.
+            const bindNumber = (el, key) => {
+                el.addEventListener('input', () => {
+                    const v = parseFloat(el.value);
+                    if (Number.isFinite(v)) setState({ [key]: v });
+                });
+                el.addEventListener('change', syncControls);
+            };
+
+            // Wall Dimensions
+            bindNumber(inputWidth, 'wallWidthInches');
+            bindNumber(inputTotalHeight, 'wallTotalHeightInches');
+            bindNumber(sliderTiledHeight, 'tiledHeightInches');
+
+            // Sub-Zones
+            bindNumber(sliderFloor, 'floorPercent');
+            bindNumber(sliderTrans, 'transPercent');
+            bindNumber(sliderOutlier, 'outlierPct');
+
+            algorithmSelect.addEventListener('change', (e) => setState({ algorithm: e.target.value }));
+
+            // Color Pickers
+            inputTile1.addEventListener('input', (e) => setState({ colorTile1: e.target.value }));
+            inputTile2.addEventListener('input', (e) => setState({ colorTile2: e.target.value }));
+            inputPaint.addEventListener('input', (e) => setState({ colorPaint: e.target.value }));
+            inputGrout.addEventListener('input', (e) => setState({ colorGrout: e.target.value }));
+
+            // Sheet Overlay Toggle
+            showSheetOverlayCheck.addEventListener('change', (e) => setState({ showSheetOverlay: e.target.checked }));
+
+            // Re-Seed
+            document.getElementById('randomizeSeedBtn').addEventListener('click', () => {
+                setState({ seed: Math.floor(Math.random() * 1000000), manualOverrides: {} });
+            });
+
+            // Reset Defaults
+            document.getElementById('resetDefaultsBtn').addEventListener('click', resetDefaults);
+
+            // Download PNG
+            document.getElementById('downloadPngBtn').addEventListener('click', downloadCanvasPNG);
+
+            // Canvas Manual Tile Flip
+            canvas.addEventListener('click', (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                const clickY = e.clientY - rect.top;
+
+                for (let i = renderedTiles.length - 1; i >= 0; i--) {
+                    const tile = renderedTiles[i];
+                    if (isPointInPolygon({ x: clickX, y: clickY }, tile.points)) {
+                        setState({
+                            manualOverrides: { ...state.manualOverrides, [tile.overrideKey]: 1 - tile.colorIdx }
+                        });
+                        break;
+                    }
+                }
+            });
+
+            // Multi-Wall Takeoff
+            document.getElementById('addWallToTakeoffBtn').addEventListener('click', saveCurrentWallToTakeoff);
+
+            // Config Modal
+            document.getElementById('openConfigModalBtn').addEventListener('click', openConfigModal);
+            document.getElementById('closeConfigModalBtn').addEventListener('click', closeConfigModal);
+            document.getElementById('cancelModalBtn').addEventListener('click', closeConfigModal);
+            document.getElementById('copyJsonBtn').addEventListener('click', copyConfigJson);
+            document.getElementById('applyJsonBtn').addEventListener('click', applyConfigJson);
+        }
+
+        function resetDefaults() {
+            setState({ ...DEFAULTS, manualOverrides: {} });
+        }
+
+        function isPointInPolygon(pt, poly) {
+            let inside = false;
+            for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+                const xi = poly[i].x, yi = poly[i].y;
+                const xj = poly[j].x, yj = poly[j].y;
+                const intersect = ((yi > pt.y) !== (yj > pt.y)) &&
+                    (pt.x < (xj - xi) * (pt.y - yi) / (yj - yi) + xi);
+                if (intersect) inside = !inside;
+            }
+            return inside;
+        }
+
+        // Multi-Wall Takeoff
+        function saveCurrentWallToTakeoff() {
+            const wallName = `Wall ${savedWalls.length + 1} (${state.wallWidthInches}″ × ${state.wallTotalHeightInches}″)`;
+            const sheetsTotal = parseInt(statTotalSheets.textContent) || 0;
+            const c1Sheets = parseInt(statC1Sheets.textContent) || 0;
+            const c2Sheets = parseInt(statC2Sheets.textContent) || 0;
+            const handSwaps = parseInt(statHandSwaps.textContent) || 0;
+            const swapsC1 = parseInt(statSwappedC1.textContent) || 0;
+            const swapsC2 = parseInt(statSwappedC2.textContent) || 0;
+
+            savedWalls.push({
+                name: wallName,
+                width: state.wallWidthInches,
+                height: state.wallTotalHeightInches,
+                tiledH: state.tiledHeightInches,
+                sheetsTotal,
+                c1Sheets,
+                c2Sheets,
+                handSwaps,
+                swapsC1,
+                swapsC2
+            });
+
+            renderSavedWallsList();
+        }
+
+        function renderSavedWallsList() {
+            const list = document.getElementById('savedWallsList');
+            if (savedWalls.length === 0) {
+                list.innerHTML = `<div class="text-[11px] text-slate-500 italic p-1">No additional walls saved.</div>`;
+                return;
+            }
+
+            let html = '';
+            let aggSheets = 0;
+            let aggC1 = 0;
+            let aggC2 = 0;
+            let aggSwaps = 0;
+            let aggSwapsC1 = 0;
+            let aggSwapsC2 = 0;
+
+            savedWalls.forEach((w, idx) => {
+                aggSheets += w.sheetsTotal;
+                aggC1 += w.c1Sheets;
+                aggC2 += w.c2Sheets;
+                aggSwaps += w.handSwaps;
+                aggSwapsC1 += (w.swapsC1 || 0);
+                aggSwapsC2 += (w.swapsC2 || 0);
+
+                html += `
+                    <div class="flex items-center justify-between bg-slate-950 p-2 rounded border border-slate-800 text-[11px]">
+                        <div>
+                            <span class="font-medium text-slate-200">${w.name}</span>
+                            <span class="text-slate-500 block font-mono">C1: ${w.c1Sheets} | C2: ${w.c2Sheets} (${w.sheetsTotal} sheets)</span>
+                            <span class="text-amber-400 text-[10px] block font-mono">Swaps: ${w.handSwaps} (${w.swapsC1} C1, ${w.swapsC2} C2)</span>
+                        </div>
+                        <button onclick="removeSavedWall(${idx})" class="text-rose-400 hover:text-rose-300 ml-2">✕</button>
+                    </div>
+                `;
+            });
+
+            const totalCartons = Math.ceil((aggSheets * 1.10) / 10);
+            html += `
+                <div class="pt-2 border-t border-slate-800 font-mono text-[11px] text-cyan-300">
+                    <div>Total Takeoff: ${aggSheets} sheets (${totalCartons} boxes)</div>
+                    <div class="text-slate-400">Total C1: ${aggC1} | Total C2: ${aggC2}</div>
+                    <div class="text-amber-400 text-[10px]">Total Swaps: ${aggSwaps} (${aggSwapsC1} C1, ${aggSwapsC2} C2)</div>
+                </div>
+            `;
+
+            list.innerHTML = html;
+        }
+
+        window.removeSavedWall = function(index) {
+            savedWalls.splice(index, 1);
+            renderSavedWallsList();
+        };
+
+        // --- Config JSON ---
+
+        function generateConfigJSON() {
+            const config = {
+                version: CONFIG_VERSION,
+                physicalWallInches: {
+                    width: state.wallWidthInches,
+                    totalHeight: state.wallTotalHeightInches,
+                    tiledHeight: state.tiledHeightInches
+                },
+                colors: {
+                    color1: state.colorTile1,
+                    color2: state.colorTile2,
+                    paintedWall: state.colorPaint,
+                    grout: state.colorGrout
+                },
+                tiledSubZones: {
+                    color1Percent: state.floorPercent,
+                    transitionPercent: state.transPercent
+                },
+                algorithm: {
+                    type: state.algorithm,
+                    outlierScatterPercent: state.outlierPct,
+                    seed: state.seed
+                },
+                // Keys are `${col}_f${tierAboveFloor}_${type}`, values 0 (C1) or 1 (C2)
+                manualOverrides: state.manualOverrides
+            };
+            return JSON.stringify(config, null, 2);
+        }
+
+        // Maps the fields present in a parsed config onto a state patch. Absent fields keep
+        // their current value; validation and clamping happen in normalizeState.
+        function configToPatch(parsed) {
+            const patch = {};
+            const wall = parsed.physicalWallInches || {};
+            if (wall.width !== undefined) patch.wallWidthInches = wall.width;
+            if (wall.totalHeight !== undefined) patch.wallTotalHeightInches = wall.totalHeight;
+            if (wall.tiledHeight !== undefined) patch.tiledHeightInches = wall.tiledHeight;
+
+            const colors = parsed.colors || {};
+            const color1 = colors.color1 || colors.tile1FloorBase;
+            const color2 = colors.color2 || colors.tile2WallBase;
+            if (color1) patch.colorTile1 = color1;
+            if (color2) patch.colorTile2 = color2;
+            if (colors.paintedWall) patch.colorPaint = colors.paintedWall;
+            if (colors.grout) patch.colorGrout = colors.grout;
+
+            const zones = parsed.tiledSubZones || {};
+            if (zones.color1Percent !== undefined) patch.floorPercent = zones.color1Percent;
+            else if (zones.floorPercent !== undefined) patch.floorPercent = zones.floorPercent;
+            if (zones.transitionPercent !== undefined) patch.transPercent = zones.transitionPercent;
+
+            const algo = parsed.algorithm || {};
+            if (algo.type !== undefined) patch.algorithm = algo.type;
+            if (algo.outlierScatterPercent !== undefined) patch.outlierPct = algo.outlierScatterPercent;
+            if (algo.seed !== undefined) patch.seed = algo.seed;
+
+            return patch;
+        }
+
+        // v1 configs stored hex strings keyed by `${col}_${rowFromTop}_${type}`.
+        function convertLegacyOverrides(raw, s) {
+            const out = {};
+            if (!raw || typeof raw !== 'object') return out;
+            for (const [key, hex] of Object.entries(raw)) {
+                const m = /^(-?\d+)_(-?\d+)_(top|left|right)$/.exec(key);
+                if (!m || typeof hex !== 'string') continue;
+                const c = hex.toLowerCase();
+                const idx = (c === s.colorTile1) ? 0 : (c === s.colorTile2) ? 1 : -1;
+                if (idx < 0) continue;
+                out[overrideKey(Number(m[1]), floorRowIndex(Number(m[2]), s.tiledHeightInches), m[3])] = idx;
+            }
+            return out;
+        }
+
+        function openConfigModal() {
+            configJsonTextarea.value = generateConfigJSON();
+            configStatusMsg.textContent = '';
+            configModal.classList.remove('hidden');
+        }
+
+        function closeConfigModal() {
+            configModal.classList.add('hidden');
+        }
+
+        function copyConfigJson() {
+            configJsonTextarea.select();
+            document.execCommand('copy');
+            configStatusMsg.textContent = 'Config JSON copied to clipboard!';
+            configStatusMsg.className = 'text-xs font-mono text-emerald-400';
+            setTimeout(() => { configStatusMsg.textContent = ''; }, 2500);
+        }
+
+        function applyConfigJson() {
+            let parsed;
+            try {
+                parsed = JSON.parse(configJsonTextarea.value);
+            } catch (err) {
+                configStatusMsg.textContent = 'Error parsing JSON: ' + err.message;
+                configStatusMsg.className = 'text-xs font-mono text-rose-400';
+                return;
+            }
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                configStatusMsg.textContent = 'Config must be a JSON object.';
+                configStatusMsg.className = 'text-xs font-mono text-rose-400';
+                return;
+            }
+
+            const warnings = [];
+            const version = (parsed.version === undefined) ? 1 : Number(parsed.version);
+            if (!(version >= 1 && version <= CONFIG_VERSION)) {
+                warnings.push(`unknown config version ${JSON.stringify(parsed.version)}, read as v${CONFIG_VERSION}`);
+            }
+
+            // Report every field that was rejected or clamped
+            const patch = configToPatch(parsed);
+            const next = normalizeState({ ...state, ...patch }, state);
+            for (const [key, value] of Object.entries(patch)) {
+                const given = (typeof value === 'string') ? value.trim().toLowerCase() : value;
+                if (String(next[key]) !== String(given)) {
+                    warnings.push(`${key}: ${JSON.stringify(value)} → ${JSON.stringify(next[key])}`);
+                }
+            }
+
+            const rawOverrides = parsed.manualOverrides || {};
+            next.manualOverrides = (version === 1)
+                ? convertLegacyOverrides(rawOverrides, next)
+                : sanitizeOverrides(rawOverrides);
+            const dropped = Object.keys(rawOverrides).length - Object.keys(next.manualOverrides).length;
+            if (dropped > 0) warnings.push(`${dropped} manual override(s) dropped`);
+
+            setState(next);
+
+            if (warnings.length) {
+                configStatusMsg.textContent = 'Applied with adjustments: ' + warnings.join('; ');
+                configStatusMsg.className = 'text-xs font-mono text-amber-400';
+            } else {
+                closeConfigModal();
+            }
+        }
+
+        // --- Initialization ---
+        window.addEventListener('resize', scheduleRender);
+        window.addEventListener('DOMContentLoaded', () => {
+            bindInputs();
+            syncControls();
+            scheduleRender();
+        });
+    </script>
+</body>
+</html>
