@@ -263,6 +263,15 @@
                 </div>
             </div>
 
+            <!-- Voids (cutouts) -->
+            <div class="space-y-3 bg-slate-900/90 p-4 rounded-xl border border-slate-800">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Voids (Cutouts)</h2>
+                    <span class="text-[11px] text-slate-500">inches, from floor at left wall</span>
+                </div>
+                <div id="voidList" class="space-y-1.5 text-xs"></div>
+            </div>
+
             <!-- Multi-Wall Purchasing Planner -->
             <div class="space-y-3 bg-slate-900/90 p-4 rounded-xl border border-slate-800">
                 <div class="flex items-center justify-between">
@@ -282,33 +291,37 @@
         <main class="flex-1 flex flex-col bg-slate-950 overflow-hidden relative">
             
             <!-- Dynamic Takeoff / Inventory Bar -->
-            <div class="border-b border-slate-800 bg-slate-900/40 px-6 py-2.5 flex items-center justify-between text-xs font-mono">
-                <div class="flex items-center gap-6">
+            <div class="border-b border-slate-800 bg-slate-900/40 px-6 py-2.5 flex flex-wrap items-center justify-between gap-x-6 gap-y-1 text-xs font-mono">
+                <div class="flex flex-wrap items-center gap-x-6 gap-y-1">
                     <div>
-                        <span class="text-slate-500">Grid Sheets:</span>
-                        <span id="statTotalSheets" class="text-cyan-400 font-bold ml-1">48</span>
-                        <span class="text-slate-600 ml-0.5">(8 cols × 6 rows)</span>
+                        <span class="text-slate-500">Sheets:</span>
+                        <span id="statTotalSheets" class="text-cyan-400 font-bold ml-1"></span>
+                        <span id="statGridDims" class="text-slate-600 ml-0.5"></span>
                     </div>
                     <div>
-                        <span class="text-slate-500">Color 1 (C1):</span>
-                        <span id="statC1Sheets" class="text-amber-400 font-bold ml-1">40 sheets</span>
+                        <span class="text-slate-500">C1:</span>
+                        <span id="statC1Sheets" class="text-amber-400 font-bold ml-1"></span>
+                        <span id="statC1Detail" class="text-slate-500 text-[11px] ml-0.5"></span>
                     </div>
                     <div>
-                        <span class="text-slate-500">Color 2 (C2):</span>
-                        <span id="statC2Sheets" class="text-cyan-300 font-bold ml-1">8 sheets</span>
+                        <span class="text-slate-500">C2:</span>
+                        <span id="statC2Sheets" class="text-cyan-300 font-bold ml-1"></span>
+                        <span id="statC2Detail" class="text-slate-500 text-[11px] ml-0.5"></span>
                     </div>
                     <div>
                         <span class="text-slate-500">Hand-Swapped:</span>
-                        <span id="statHandSwaps" class="text-amber-400 font-bold ml-1">28 tiles</span>
-                        <span class="text-slate-400 text-[11px] ml-1">(<span id="statSwappedC1" class="text-amber-400 font-semibold">14</span> C1, <span id="statSwappedC2" class="text-cyan-300 font-semibold">14</span> C2)</span>
+                        <span id="statHandSwaps" class="text-amber-400 font-bold ml-1"></span>
+                        <span class="text-slate-400 text-[11px] ml-1">(<span id="statSwappedC1" class="text-amber-400 font-semibold"></span> C1, <span id="statSwappedC2" class="text-cyan-300 font-semibold"></span> C2)</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-500">Spares:</span>
+                        <span id="statSpares" class="text-slate-300 ml-1"></span>
                     </div>
                 </div>
 
-                <div class="flex items-center gap-4">
-                    <div class="px-2.5 py-1 rounded bg-slate-800/80 border border-slate-700">
-                        <span class="text-slate-400">Order:</span>
-                        <span id="statCartons" class="text-cyan-300 font-bold ml-1">5 Boxes (50 sheets)</span>
-                    </div>
+                <div class="px-2.5 py-1 rounded bg-slate-800/80 border border-slate-700">
+                    <span class="text-slate-400">Order:</span>
+                    <span id="statCartons" class="text-cyan-300 font-bold ml-1"></span>
                 </div>
             </div>
 
@@ -419,6 +432,16 @@
         const MAX_PX_PER_INCH = 18.0;
         const FIT_PADDING_PX = 24;        // space around the wall when fitted
         const CANVAS_BG = '#0b1120';      // canvas area outside the wall + margins
+        const OUTSIDE_WALL_WASH = 'rgba(100, 116, 139, 0.18)';
+        const CUT_TILE_STROKE = 'rgba(51, 65, 85, 0.75)';
+        const VOID_STROKE = '#d946ef';
+        const VOID_BADGE_RADIUS_PX = 8;
+
+        // Spec card (CSS px). It sits in the painted area when that fits at the fitted scale,
+        // otherwise in a strip added below the bottom margin.
+        const CARD_WIDTH_PX = 480;
+        const CARD_HEIGHT_PX = 118;
+        const CARD_MARGIN_PX = 16;
 
         // Navigation (view only, not saved in config)
         const ZOOM_MIN = 0.5;             // relative to the fitted scale
@@ -433,8 +456,8 @@
         const WASTE_FACTOR = 1.10;
 
         const ALGORITHMS = ['lightning', 'bayer', 'cellular', 'glitch', 'blueNoise'];
-        // v3: color1/C1 is the top color (v1/v2 had color1 at the bottom)
-        const CONFIG_VERSION = 3;
+        // v3: color1/C1 is the top color (v1/v2 had color1 at the bottom). v4: adds voids.
+        const CONFIG_VERSION = 4;
 
         // --- Core Application State ---
         // Single source of truth for defaults. Controls are filled from state by syncControls().
@@ -457,7 +480,9 @@
 
             showSheetOverlay: true,
             // Keyed by overrideKey(); value is the color index (C1 = 0 top, C2 = 1 bottom)
-            manualOverrides: Object.freeze({})
+            manualOverrides: Object.freeze({}),
+            // Cutouts in wall inches: { id, x, y, w, h }, (x, y) = bottom-left corner
+            voids: Object.freeze([])
         });
 
         // [min, max] for numeric state. tiledHeightInches is further capped at wallTotalHeightInches.
@@ -483,6 +508,55 @@
 
         function overrideKey(col, floorRow, type) {
             return `${col}_f${floorRow}_${type}`;
+        }
+
+        const VOID_SNAP_INCHES = 1 / 16;
+
+        function snapInches(v) {
+            return Math.round(v / VOID_SNAP_INCHES) * VOID_SNAP_INCHES;
+        }
+
+        // Keeps well-formed voids (finite numbers, positive size) and gives each a unique id.
+        // Voids are not clipped to the wall here: that happens when an edit is committed
+        // (clipVoidsToWall), so typing a smaller width doesn't destroy them mid-edit.
+        function sanitizeVoids(raw) {
+            if (!Array.isArray(raw)) return [];
+            const out = [];
+            const used = new Set();
+            for (const v of raw) {
+                if (!v || typeof v !== 'object') continue;
+                const [x, y, w, h] = [v.x, v.y, v.w, v.h].map(Number);
+                if (![x, y, w, h].every(Number.isFinite) || w <= 0 || h <= 0) continue;
+                const id = (Number.isInteger(v.id) && v.id > 0 && !used.has(v.id)) ? v.id : null;
+                if (id) used.add(id);
+                out.push({ id, x, y, w, h });
+            }
+            let nextId = Math.max(0, ...used) + 1;
+            for (const v of out) if (v.id === null) v.id = nextId++;
+            return out;
+        }
+
+        // Intersection of a rectangle with the wall (0..W × 0..H), or null if nothing is left
+        function clipRectToWall(r, s) {
+            const x0 = Math.max(0, r.x);
+            const y0 = Math.max(0, r.y);
+            const x1 = Math.min(s.wallWidthInches, r.x + r.w);
+            const y1 = Math.min(s.wallTotalHeightInches, r.y + r.h);
+            if (x1 - x0 <= 0 || y1 - y0 <= 0) return null;
+            return { ...r, x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+        }
+
+        function clipVoidsToWall(s) {
+            return s.voids.map(v => clipRectToWall(v, s)).filter(Boolean);
+        }
+
+        // Trims stored voids to the current wall; voids left with no area are deleted.
+        // Called when a wall-size or void edit is committed, and on config import.
+        function commitVoidClip() {
+            const clipped = clipVoidsToWall(state);
+            const changed = clipped.length !== state.voids.length ||
+                clipped.some((v, i) => v.x !== state.voids[i].x || v.y !== state.voids[i].y || v.w !== state.voids[i].w || v.h !== state.voids[i].h);
+            if (changed) setState({ voids: clipped });
         }
 
         function sanitizeOverrides(raw) {
@@ -514,6 +588,7 @@
 
             out.showSheetOverlay = Boolean(s.showSheetOverlay);
             out.manualOverrides = sanitizeOverrides(s.manualOverrides);
+            out.voids = sanitizeVoids(s.voids);
             return out;
         }
 
@@ -571,8 +646,13 @@
         const statSwappedC1 = document.getElementById('statSwappedC1');
         const statSwappedC2 = document.getElementById('statSwappedC2');
         const statCartons = document.getElementById('statCartons');
+        const statGridDims = document.getElementById('statGridDims');
+        const statC1Detail = document.getElementById('statC1Detail');
+        const statC2Detail = document.getElementById('statC2Detail');
+        const statSpares = document.getElementById('statSpares');
 
         const showSheetOverlayCheck = document.getElementById('showSheetOverlayCheck');
+        const voidList = document.getElementById('voidList');
         const configModal = document.getElementById('configModal');
         const configJsonTextarea = document.getElementById('configJsonTextarea');
         const configStatusMsg = document.getElementById('configStatusMsg');
@@ -652,6 +732,7 @@
             hexGrout.textContent = s.colorGrout.toUpperCase();
 
             showSheetOverlayCheck.checked = s.showSheetOverlay;
+            syncVoidList(s, setValue);
 
             const zones = getNormalizedZones();
             c2PctVal.textContent = Math.round(zones.floorPct) + '%';
@@ -688,6 +769,7 @@
             // Grid, colors and inventory only depend on state; pan/zoom/resize reuse them
             if (state !== lastState) {
                 lastGrid = buildSheetGrid(state);
+                markCutTiles(lastGrid, state);
                 assignColors(lastGrid, state);
                 lastInventory = computeInventory(lastGrid);
                 lastState = state;
@@ -814,6 +896,87 @@
             return { cols, rows, sheets, tiles };
         }
 
+        // --- Pipeline stage 1b: cut tiles and sheet culling ---
+        // Void space = the voids plus everything outside the wall. A tile is cut if it lies fully
+        // in void space (zero area on the usable wall); cut tiles are spares, not installed.
+        // Sheets whose tiles are all cut are dropped, and the remaining sheets renumbered.
+        const CUT_AREA_EPSILON = 1e-6; // sq in
+
+        // The usable wall as disjoint rectangles: the wall split along every void edge, keeping
+        // the cells that aren't inside a void. Overlapping voids just merge.
+        function usableCells(s) {
+            const voids = clipVoidsToWall(s);
+            const uniqueSorted = (vals) => [...new Set(vals)].sort((a, b) => a - b);
+            const xs = uniqueSorted([0, s.wallWidthInches, ...voids.flatMap(v => [v.x, v.x + v.w])]);
+            const ys = uniqueSorted([0, s.wallTotalHeightInches, ...voids.flatMap(v => [v.y, v.y + v.h])]);
+            const cells = [];
+            for (let i = 0; i + 1 < xs.length; i++) {
+                for (let j = 0; j + 1 < ys.length; j++) {
+                    const cx = (xs[i] + xs[i + 1]) / 2;
+                    const cy = (ys[j] + ys[j + 1]) / 2;
+                    const inVoid = voids.some(v => cx > v.x && cx < v.x + v.w && cy > v.y && cy < v.y + v.h);
+                    if (!inVoid) cells.push({ x0: xs[i], x1: xs[i + 1], y0: ys[j], y1: ys[j + 1] });
+                }
+            }
+            return cells;
+        }
+
+        // Area of a convex polygon clipped to an axis-aligned rectangle (Sutherland–Hodgman)
+        function clippedArea(points, r) {
+            let poly = points;
+            const planes = [['x', r.x0, 1], ['x', r.x1, -1], ['y', r.y0, 1], ['y', r.y1, -1]];
+            for (const [axis, value, sign] of planes) {
+                const next = [];
+                for (let i = 0; i < poly.length; i++) {
+                    const a = poly[i];
+                    const b = poly[(i + 1) % poly.length];
+                    const aIn = (a[axis] - value) * sign >= 0;
+                    const bIn = (b[axis] - value) * sign >= 0;
+                    if (aIn) next.push(a);
+                    if (aIn !== bIn) {
+                        const t = (value - a[axis]) / (b[axis] - a[axis]);
+                        next.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+                    }
+                }
+                poly = next;
+                if (poly.length < 3) return 0;
+            }
+            let twiceArea = 0;
+            for (let i = 0; i < poly.length; i++) {
+                const a = poly[i];
+                const b = poly[(i + 1) % poly.length];
+                twiceArea += a.x * b.y - b.x * a.y;
+            }
+            return Math.abs(twiceArea) / 2;
+        }
+
+        function markCutTiles(grid, s) {
+            const cells = usableCells(s);
+            for (const tile of grid.tiles) {
+                const xs = tile.points.map(p => p.x);
+                const ys = tile.points.map(p => p.y);
+                const minX = Math.min(...xs), maxX = Math.max(...xs);
+                const minY = Math.min(...ys), maxY = Math.max(...ys);
+
+                tile.cut = true;
+                for (const c of cells) {
+                    if (maxX <= c.x0 || minX >= c.x1 || maxY <= c.y0 || minY >= c.y1) continue;
+                    const insideCell = minX >= c.x0 && maxX <= c.x1 && minY >= c.y0 && maxY <= c.y1;
+                    if (insideCell || clippedArea(tile.points, c) > CUT_AREA_EPSILON) {
+                        tile.cut = false;
+                        break;
+                    }
+                }
+            }
+
+            grid.sheets = grid.sheets.filter(sheet => sheet.tiles.some(t => !t.cut));
+            grid.sheets.forEach((sheet, i) => {
+                sheet.id = i + 1;
+                for (const t of sheet.tiles) t.sheetId = sheet.id;
+            });
+            grid.tiles = grid.sheets.flatMap(sheet => sheet.tiles);
+        }
+
         // --- Pipeline stage 2: color assignment ---
         // Sets tile.baseColorIdx (procedural) and tile.colorIdx (after manual overrides).
         function assignColors(grid, s) {
@@ -888,54 +1051,72 @@
             }
         }
 
-        // --- Pipeline stage 3: inventory (majority rule & hand-swapped tiles) ---
-        // Also labels each sheet with majorityIdx / minorityIdx / minorityCount / isMixed.
+        // --- Pipeline stage 3: inventory (majority rule, hand-swaps, spares, order) ---
+        // Majority color and hand-swaps count usable tiles only. Cut tiles on a kept sheet are
+        // spares of that sheet's majority color. Hand-swaps are supplied first by the tiles pulled
+        // out of the other color's sheets, then by spares; any shortfall is bought as extra
+        // sheets. Boxes are counted per color with standard waste.
+        // Also labels each sheet with majorityIdx / minorityIdx / minorityCount / cutCount / isMixed.
         function computeInventory(grid) {
             let c1Sheets = 0;
             let c2Sheets = 0;
-            let handSwaps = 0;
-            let swappedC1 = 0; // C1 tiles placed on C2 majority sheets
-            let swappedC2 = 0; // C2 tiles placed on C1 majority sheets
+            let swappedC1 = 0; // C1 tiles placed on C2 majority sheets (= C2 tiles pulled out)
+            let swappedC2 = 0; // C2 tiles placed on C1 majority sheets (= C1 tiles pulled out)
+            let spareC1 = 0;   // cut tiles on C1 majority sheets
+            let spareC2 = 0;   // cut tiles on C2 majority sheets
 
             for (const sheet of grid.sheets) {
                 let c1Count = 0;
                 let c2Count = 0;
+                let cutCount = 0;
                 for (const t of sheet.tiles) {
-                    if (t.colorIdx === C1) c1Count++;
+                    if (t.cut) cutCount++;
+                    else if (t.colorIdx === C1) c1Count++;
                     else c2Count++;
                 }
 
-                // Ties (18/18) go to the bottom color, C2
+                // Ties (e.g. 18/18) go to the bottom color, C2
                 if (c2Count >= c1Count) {
                     c2Sheets++;
-                    handSwaps += c1Count;
                     swappedC1 += c1Count;
+                    spareC2 += cutCount;
                     sheet.majorityIdx = C2;
                     sheet.minorityIdx = C1;
                     sheet.minorityCount = c1Count;
                 } else {
                     c1Sheets++;
-                    handSwaps += c2Count;
                     swappedC2 += c2Count;
+                    spareC1 += cutCount;
                     sheet.majorityIdx = C1;
                     sheet.minorityIdx = C2;
                     sheet.minorityCount = c2Count;
                 }
+                sheet.cutCount = cutCount;
                 sheet.isMixed = (c1Count > 0 && c2Count > 0);
             }
 
-            const totalSheets = grid.sheets.length;
+            const extraC1 = Math.ceil(Math.max(0, swappedC1 - swappedC2 - spareC1) / TILES_PER_SHEET);
+            const extraC2 = Math.ceil(Math.max(0, swappedC2 - swappedC1 - spareC2) / TILES_PER_SHEET);
+            const boxesFor = (sheets) => Math.ceil((sheets * WASTE_FACTOR) / SHEETS_PER_BOX);
+            const boxesC1 = boxesFor(c1Sheets + extraC1);
+            const boxesC2 = boxesFor(c2Sheets + extraC2);
+
             return {
-                totalSheets,
+                totalSheets: grid.sheets.length,
                 gridCols: grid.cols,
                 gridRows: grid.rows,
                 c1Sheets,
                 c2Sheets,
-                handSwaps,
+                handSwaps: swappedC1 + swappedC2,
                 swappedC1,
                 swappedC2,
-                // Boxes to order with standard waste
-                boxes: Math.ceil((totalSheets * WASTE_FACTOR) / SHEETS_PER_BOX)
+                spareC1,
+                spareC2,
+                extraC1,
+                extraC2,
+                boxesC1,
+                boxesC2,
+                boxes: boxesC1 + boxesC2
             };
         }
 
@@ -949,15 +1130,21 @@
             const boundingWidthInches = s.wallWidthInches + LEFT_OFFSET_INCHES + (MARGIN_INCHES * 2);
             const boundingHeightInches = s.wallTotalHeightInches + (MARGIN_INCHES * 2);
 
-            let fitScale = Math.min(
+            const fitFor = (extraHeightPx) => Math.max(MIN_PX_PER_INCH, Math.min(MAX_PX_PER_INCH, Math.min(
                 (area.width - FIT_PADDING_PX * 2) / boundingWidthInches,
-                (area.height - FIT_PADDING_PX * 2) / boundingHeightInches
-            );
-            fitScale = Math.max(MIN_PX_PER_INCH, Math.min(MAX_PX_PER_INCH, fitScale));
+                (area.height - FIT_PADDING_PX * 2 - extraHeightPx) / boundingHeightInches
+            )));
+
+            // Card placement is decided at the fitted scale, so zooming never moves it
+            const cardSpacePx = CARD_HEIGHT_PX + CARD_MARGIN_PX * 2;
+            let fitScale = fitFor(0);
+            const cardBelow = (s.wallTotalHeightInches - s.tiledHeightInches) * fitScale < cardSpacePx;
+            if (cardBelow) fitScale = fitFor(cardSpacePx);
             const scale = fitScale * (nav ? nav.zoom : 1);
 
+            const planHeight = Math.round(boundingHeightInches * scale);
             const contentWidth = Math.round(boundingWidthInches * scale);
-            const contentHeight = Math.round(boundingHeightInches * scale);
+            const contentHeight = planHeight + (cardBelow ? cardSpacePx : 0);
             const cssWidth = nav ? area.width : contentWidth;
             const cssHeight = nav ? area.height : contentHeight;
             const contentX = nav ? Math.round((cssWidth - contentWidth) / 2 + nav.panX) : 0;
@@ -965,6 +1152,13 @@
 
             const wallLeftX = contentX + Math.round((MARGIN_INCHES + LEFT_OFFSET_INCHES) * scale);
             const wallFloorY = contentY + Math.round((MARGIN_INCHES + s.wallTotalHeightInches) * scale);
+            const wallRightX = Math.round(wallLeftX + (s.wallWidthInches * scale));
+            const wallCeilingY = contentY + Math.round(MARGIN_INCHES * scale);
+
+            const card = cardBelow
+                ? { x: contentX + CARD_MARGIN_PX, y: contentY + planHeight + CARD_MARGIN_PX, width: Math.min(CARD_WIDTH_PX, contentWidth - CARD_MARGIN_PX * 2) }
+                : { x: wallLeftX + CARD_MARGIN_PX, y: wallCeilingY + CARD_MARGIN_PX, width: Math.min(CARD_WIDTH_PX, wallRightX - wallLeftX - CARD_MARGIN_PX * 2) };
+            card.height = CARD_HEIGHT_PX;
 
             return {
                 scale,      // CSS px per inch
@@ -977,10 +1171,12 @@
                 originX: wallLeftX,
                 originY: wallFloorY,
                 wallLeftX,
-                wallRightX: Math.round(wallLeftX + (s.wallWidthInches * scale)),
+                wallRightX,
                 wallFloorY,
-                wallCeilingY: contentY + Math.round(MARGIN_INCHES * scale),
-                tiledTopY: wallFloorY - (s.tiledHeightInches * scale)
+                wallCeilingY,
+                tiledTopY: wallFloorY - (s.tiledHeightInches * scale),
+                card,
+                voidBadges: [] // filled by renderCanvas on screen: { id, x, y } for hit-testing
             };
         }
 
@@ -1025,20 +1221,42 @@
             ctx.fillStyle = s.colorPaint;
             ctx.fillRect(wallLeftX, wallCeilingY, renderedWallWidth, renderedTotalHeight);
 
-            // 3. Tiles
-            ctx.lineJoin = 'round';
-            useWallSpace();
-            ctx.lineWidth = Math.max(0.75, scale * (1.0 / 16.0)) / scale;
-            ctx.strokeStyle = s.colorGrout;
+            // Light wash over everything outside the wall, so the wall edge reads clearly
+            ctx.fillStyle = OUTSIDE_WALL_WASH;
+            ctx.beginPath();
+            ctx.rect(content.x, content.y, content.width, content.height);
+            ctx.rect(wallLeftX, wallCeilingY, renderedWallWidth, renderedTotalHeight);
+            ctx.fill('evenodd');
 
-            for (const tile of grid.tiles) {
+            // 3. Tiles: cut tiles (fully in a void or outside the wall) are dotted outlines with
+            // no fill; usable tiles are drawn on top of them
+            const tracePath = (tile) => {
                 ctx.beginPath();
                 ctx.moveTo(tile.points[0].x, tile.points[0].y);
                 ctx.lineTo(tile.points[1].x, tile.points[1].y);
                 ctx.lineTo(tile.points[2].x, tile.points[2].y);
                 ctx.lineTo(tile.points[3].x, tile.points[3].y);
                 ctx.closePath();
+            };
+            ctx.lineJoin = 'round';
+            useWallSpace();
 
+            ctx.save();
+            ctx.lineWidth = 1 / scale;
+            ctx.setLineDash([2 / scale, 2 / scale]);
+            ctx.strokeStyle = CUT_TILE_STROKE;
+            for (const tile of grid.tiles) {
+                if (!tile.cut) continue;
+                tracePath(tile);
+                ctx.stroke();
+            }
+            ctx.restore();
+
+            ctx.lineWidth = Math.max(0.75, scale * (1.0 / 16.0)) / scale;
+            ctx.strokeStyle = s.colorGrout;
+            for (const tile of grid.tiles) {
+                if (tile.cut) continue;
+                tracePath(tile);
                 ctx.fillStyle = palette[tile.colorIdx];
                 ctx.fill();
                 ctx.stroke();
@@ -1144,69 +1362,42 @@
             ctx.fillText(`TILE LINE (${s.tiledHeightInches}″)`, wallLeftX + 6, tiledTopY + 6);
             ctx.restore();
 
-            // Render Specification & Takeoff Card Directly in Painted Drywall Area
-            const paintHeightPx = tiledTopY - wallCeilingY;
-            if (paintHeightPx >= 75) {
-                ctx.save();
-                const cardMargin = 16;
-                const cardX = wallLeftX + cardMargin;
-                const cardY = wallCeilingY + cardMargin;
-                const cardW = Math.min(renderedWallWidth - (cardMargin * 2), 480);
-                const cardH = Math.min(paintHeightPx - (cardMargin * 2), 110);
+            // 5. Voids: dashed outline and a dimension label, no fill. Drawn clipped to the wall,
+            // which previews how a pending wall-size edit will trim them.
+            ctx.save();
+            for (const stored of s.voids) {
+                const v = clipRectToWall(stored, s);
+                if (!v) continue;
+                const tl = toScreen(view, v.x, v.y + v.h);
+                const br = toScreen(view, v.x + v.w, v.y);
 
-                // Card background and border
-                ctx.fillStyle = 'rgba(15, 23, 42, 0.90)';
-                ctx.beginPath();
-                ctx.roundRect(cardX, cardY, cardW, cardH, 8);
-                ctx.fill();
-                ctx.strokeStyle = 'rgba(56, 189, 248, 0.40)';
-                ctx.lineWidth = 1;
-                ctx.stroke();
+                ctx.strokeStyle = VOID_STROKE;
+                ctx.lineWidth = 1.5;
+                ctx.setLineDash([6, 4]);
+                ctx.strokeRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
+                ctx.setLineDash([]);
 
-                // Card header title
-                ctx.fillStyle = '#ffffff';
-                ctx.font = 'bold 11px Inter, sans-serif';
-                ctx.textAlign = 'left';
-                ctx.textBaseline = 'top';
-                ctx.fillText('INSTALLATION SPECIFICATIONS & MATERIAL TAKEOFF', cardX + 12, cardY + 10);
+                drawPill(ctx, voidLabel(v), (tl.x + br.x) / 2, (tl.y + br.y) / 2);
 
-                // Grid Sheets & Dimensions row
-                ctx.font = '10px JetBrains Mono, monospace';
-                ctx.fillStyle = '#94a3b8';
-                ctx.fillText(`WALL: ${s.wallWidthInches}″ W × ${s.wallTotalHeightInches}″ H (Tiled ${s.tiledHeightInches}″)  |  GRID: ${inventory.totalSheets} Sheets (${inventory.gridCols}×${inventory.gridRows})`, cardX + 12, cardY + 28);
-
-                // Color 1 swatch
-                ctx.fillStyle = s.colorTile1;
-                ctx.beginPath();
-                ctx.arc(cardX + 18, cardY + 54, 6, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.strokeStyle = '#ffffff';
-                ctx.lineWidth = 1;
-                ctx.stroke();
-
-                ctx.fillStyle = '#f59e0b';
-                ctx.font = 'bold 10px JetBrains Mono, monospace';
-                ctx.fillText(`Color 1: ${inventory.c1Sheets} Base Sheets`, cardX + 30, cardY + 49);
-
-                // Color 2 swatch
-                ctx.fillStyle = s.colorTile2;
-                ctx.beginPath();
-                ctx.arc(cardX + 210, cardY + 54, 6, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.strokeStyle = '#ffffff';
-                ctx.lineWidth = 1;
-                ctx.stroke();
-
-                ctx.fillStyle = '#38bdf8';
-                ctx.fillText(`Color 2: ${inventory.c2Sheets} Base Sheets`, cardX + 222, cardY + 49);
-
-                // Hand-swap details & box order recommendation
-                ctx.fillStyle = '#cbd5e1';
-                ctx.font = '10px JetBrains Mono, monospace';
-                ctx.fillText(`Hand-Swaps: ${inventory.handSwaps} tiles (${inventory.swappedC1} C1 into C2, ${inventory.swappedC2} C2 into C1)  |  Order: ${inventory.boxes} Boxes`, cardX + 12, cardY + 74);
-
-                ctx.restore();
+                // Delete badge (on screen only; never in the PNG)
+                if (view.onScreen) {
+                    ctx.fillStyle = '#ef4444';
+                    ctx.beginPath();
+                    ctx.arc(br.x, tl.y, VOID_BADGE_RADIUS_PX, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    ctx.moveTo(br.x - 3, tl.y - 3); ctx.lineTo(br.x + 3, tl.y + 3);
+                    ctx.moveTo(br.x + 3, tl.y - 3); ctx.lineTo(br.x - 3, tl.y + 3);
+                    ctx.stroke();
+                    view.voidBadges.push({ id: stored.id, x: br.x, y: tl.y });
+                }
             }
+            ctx.restore();
+
+            // 6. Specification & takeoff card (painted area, or the strip below the floor)
+            drawSpecCard(ctx, view.card, inventory, s);
 
             ctx.restore(); // content clip
 
@@ -1216,6 +1407,87 @@
                 ctx.lineWidth = 1;
                 ctx.strokeRect(content.x + 0.5, content.y + 0.5, content.width - 1, content.height - 1);
             }
+        }
+
+        // Lengths on void labels and inputs: exact to the 1/16″ snap, trailing zeros dropped
+        function formatLength(v) {
+            return `${+v.toFixed(4)}″`;
+        }
+
+        function voidLabel(v) {
+            return `${formatLength(v.w)} × ${formatLength(v.h)} @ (${formatLength(v.x)}, ${formatLength(v.y)})`;
+        }
+
+        // White monospace text on a dark rounded pill, centered at (cx, cy)
+        function drawPill(ctx, text, cx, cy) {
+            ctx.save();
+            ctx.font = '600 10px JetBrains Mono, monospace';
+            const w = Math.ceil(ctx.measureText(text).width) + 12;
+            const h = 18;
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+            ctx.beginPath();
+            ctx.roundRect(cx - w / 2, cy - h / 2, w, h, 4);
+            ctx.fill();
+            ctx.fillStyle = '#ffffff';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, cx, cy);
+            ctx.restore();
+        }
+
+        // Laid out at CARD_WIDTH_PX × CARD_HEIGHT_PX and scaled down uniformly when the space
+        // (card.width) is narrower, so the text never runs past the card
+        function drawSpecCard(ctx, card, inv, s) {
+            const k = Math.min(1, card.width / CARD_WIDTH_PX);
+            if (k <= 0) return;
+            const x = 0, y = 0, width = CARD_WIDTH_PX, height = CARD_HEIGHT_PX;
+            const left = x + 12;
+            ctx.save();
+            ctx.translate(card.x, card.y);
+            ctx.scale(k, k);
+
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+            ctx.beginPath();
+            ctx.roundRect(x, y, width, height, 8);
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(56, 189, 248, 0.40)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 11px Inter, sans-serif';
+            ctx.fillText('INSTALLATION SPECIFICATIONS & MATERIAL TAKEOFF', left, y + 10);
+
+            ctx.font = '10px JetBrains Mono, monospace';
+            ctx.fillStyle = '#94a3b8';
+            ctx.fillText(`WALL: ${s.wallWidthInches}″ W × ${s.wallTotalHeightInches}″ H (Tiled ${s.tiledHeightInches}″)  |  GRID: ${inv.totalSheets} Sheets (${inv.gridCols}×${inv.gridRows})`, left, y + 28);
+
+            // One row per color: swatch, hex, sheets, extra sheets, boxes
+            const colorRow = (rowY, hex, name, accent, sheets, extra, boxes) => {
+                ctx.fillStyle = hex;
+                ctx.beginPath();
+                ctx.arc(left + 6, rowY + 5, 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                ctx.fillStyle = accent;
+                ctx.font = 'bold 10px JetBrains Mono, monospace';
+                ctx.fillText(`${name} ${hex.toUpperCase()}`, left + 18, rowY);
+                ctx.fillStyle = '#cbd5e1';
+                ctx.font = '10px JetBrains Mono, monospace';
+                ctx.fillText(`${sheets} sheets + ${extra} extra → ${boxes} ${boxes === 1 ? 'box' : 'boxes'}`, left + 140, rowY);
+            };
+            colorRow(y + 46, s.colorTile1, 'Color 1', '#f59e0b', inv.c1Sheets, inv.extraC1, inv.boxesC1);
+            colorRow(y + 62, s.colorTile2, 'Color 2', '#38bdf8', inv.c2Sheets, inv.extraC2, inv.boxesC2);
+
+            ctx.fillStyle = '#cbd5e1';
+            ctx.fillText(`Hand-swaps: ${inv.handSwaps} tiles (${inv.swappedC1} C1 into C2 sheets, ${inv.swappedC2} C2 into C1 sheets)`, left, y + 80);
+            ctx.fillText(`Spares from cuts: ${inv.spareC1} C1, ${inv.spareC2} C2  |  Order: ${inv.boxes} boxes (incl. 10% waste)`, left, y + 96);
+
+            ctx.restore();
         }
 
         // --- Cursor HUD (overlay canvas) ---
@@ -1234,6 +1506,23 @@
             const dpr = view.dpr;
             hudCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
             hudCtx.clearRect(0, 0, view.cssWidth, view.cssHeight);
+
+            // Void being drawn: cyan dashed outline, faint fill and live dimensions
+            if (voidPreview) {
+                const v = voidPreview;
+                const tl = toScreen(view, v.x, v.y + v.h);
+                const br = toScreen(view, v.x + v.w, v.y);
+                hudCtx.save();
+                hudCtx.fillStyle = 'rgba(34, 211, 238, 0.12)';
+                hudCtx.fillRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
+                hudCtx.strokeStyle = '#22d3ee';
+                hudCtx.lineWidth = 1.5;
+                hudCtx.setLineDash([6, 4]);
+                hudCtx.strokeRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
+                hudCtx.restore();
+                drawPill(hudCtx, voidLabel(v), (tl.x + br.x) / 2, (tl.y + br.y) / 2);
+                return;
+            }
 
             const c = view.content;
             if (!hoverPoint || (pointerDrag && pointerDrag.dragging)) return;
@@ -1293,13 +1582,18 @@
 
         // --- Pipeline stage 6: takeoff dashboard bar ---
         function renderDashboard(inv) {
+            const boxes = (n) => `${n} ${n === 1 ? 'box' : 'boxes'}`;
             statTotalSheets.textContent = inv.totalSheets;
+            statGridDims.textContent = `(${inv.gridCols} cols × ${inv.gridRows} rows)`;
             statC1Sheets.textContent = `${inv.c1Sheets} sheets`;
+            statC1Detail.textContent = `+${inv.extraC1} extra · ${boxes(inv.boxesC1)}`;
             statC2Sheets.textContent = `${inv.c2Sheets} sheets`;
+            statC2Detail.textContent = `+${inv.extraC2} extra · ${boxes(inv.boxesC2)}`;
             statHandSwaps.textContent = `${inv.handSwaps} tiles`;
             statSwappedC1.textContent = inv.swappedC1;
             statSwappedC2.textContent = inv.swappedC2;
-            statCartons.textContent = `${inv.boxes} Boxes (${inv.boxes * SHEETS_PER_BOX} sheets)`;
+            statSpares.textContent = `${inv.spareC1} C1, ${inv.spareC2} C2`;
+            statCartons.textContent = `${boxes(inv.boxes)} (${inv.boxesC1} C1 + ${inv.boxesC2} C2)`;
         }
 
         // --- Export Canvas as High-Res PNG ---
@@ -1349,6 +1643,10 @@
             // Wall Dimensions
             bindNumber(inputWidth, 'wallWidthInches');
             bindNumber(inputTotalHeight, 'wallTotalHeightInches');
+            // Voids are trimmed to a smaller wall only once the edit is committed
+            inputWidth.addEventListener('change', commitVoidClip);
+            inputTotalHeight.addEventListener('change', commitVoidClip);
+            bindVoidList();
             bindNumber(sliderTiledHeight, 'tiledHeightInches');
 
             // Sub-Zones
@@ -1402,10 +1700,91 @@
             setState({ ...DEFAULTS, manualOverrides: {} });
         }
 
+        // --- Void list (sidebar) ---
+        // Rows are rebuilt only when the set of voids changes, so typing in a field keeps focus.
+        // Typing updates the void live; leaving the field (change) snaps to 1/16″ and clips to the wall.
+        const VOID_FIELDS = [['w', 'W'], ['h', 'H'], ['x', 'X'], ['y', 'Y']];
+
+        function syncVoidList(s, setValue) {
+            const ids = s.voids.map(v => v.id).join(',');
+            if (voidList.dataset.ids !== ids) {
+                voidList.dataset.ids = ids;
+                if (!s.voids.length) {
+                    voidList.innerHTML = '<div class="text-[11px] text-slate-500 italic p-1">No voids. Drag on the wall to mark a window, niche or outlet box.</div>';
+                }
+                else {
+                    voidList.innerHTML = s.voids.map((v, i) => `
+                        <div class="bg-slate-950 p-2 rounded border border-slate-800" data-void-id="${v.id}">
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="text-[11px] font-mono text-fuchsia-400">Void ${i + 1}</span>
+                                <button type="button" data-action="delete" class="text-rose-400 hover:text-rose-300" title="Delete void">✕</button>
+                            </div>
+                            <div class="grid grid-cols-4 gap-1.5">
+                                ${VOID_FIELDS.map(([field, label]) => `
+                                    <label class="block text-[10px] text-slate-500">${label}
+                                        <input type="number" step="0.0625" data-field="${field}" class="w-full bg-slate-900 border border-slate-800 rounded px-1.5 py-1 text-[11px] font-mono text-cyan-300 focus:outline-none focus:border-cyan-500">
+                                    </label>`).join('')}
+                            </div>
+                        </div>`).join('');
+                }
+            }
+            for (const v of s.voids) {
+                const row = voidList.querySelector(`[data-void-id="${v.id}"]`);
+                for (const [field] of VOID_FIELDS) setValue(row.querySelector(`[data-field="${field}"]`), +v[field].toFixed(4));
+            }
+        }
+
+        function bindVoidList() {
+            const target = (e) => {
+                const row = e.target.closest('[data-void-id]');
+                return row ? { id: Number(row.dataset.voidId), field: e.target.dataset.field } : null;
+            };
+            voidList.addEventListener('input', (e) => {
+                const t = target(e);
+                if (!t || !t.field) return;
+                const value = parseFloat(e.target.value);
+                if (!Number.isFinite(value) || ((t.field === 'w' || t.field === 'h') && value <= 0)) return;
+                setState({ voids: state.voids.map(v => v.id === t.id ? { ...v, [t.field]: value } : v) });
+            });
+            voidList.addEventListener('change', (e) => {
+                const t = target(e);
+                if (!t || !t.field) return;
+                const snap = (field, value) => (field === 'w' || field === 'h')
+                    ? Math.max(VOID_SNAP_INCHES, snapInches(value))
+                    : snapInches(value);
+                setState({ voids: state.voids.map(v => v.id === t.id ? { ...v, [t.field]: snap(t.field, v[t.field]) } : v) });
+                commitVoidClip();
+                syncControls();
+            });
+            voidList.addEventListener('click', (e) => {
+                const t = target(e);
+                if (t && e.target.closest('[data-action="delete"]')) deleteVoid(t.id);
+            });
+        }
+
         // --- Canvas pointer & navigation ---
-        // A press that moves less than DRAG_THRESHOLD_PX is a click (flips the tile under it).
-        // Shift+drag pans. A plain drag is reserved for drawing voids.
-        let pointerDrag = null; // { id, startX, startY, lastX, lastY, pan, dragging }
+        // A press that moves less than DRAG_THRESHOLD_PX is a click (flips the tile under it, or
+        // deletes a void via its × badge). Shift+drag pans. A plain drag draws a void.
+        let pointerDrag = null; // { id, startX, startY, lastX, lastY, startWall, pan, dragging, cancelled }
+        let voidPreview = null; // void being drawn, in wall inches
+
+        // Rectangle between two wall points, snapped to 1/16″ and clamped to the wall
+        function voidFromDrag(a, b) {
+            const clampX = (v) => Math.min(state.wallWidthInches, Math.max(0, snapInches(v)));
+            const clampY = (v) => Math.min(state.wallTotalHeightInches, Math.max(0, snapInches(v)));
+            const x0 = clampX(Math.min(a.x, b.x)), x1 = clampX(Math.max(a.x, b.x));
+            const y0 = clampY(Math.min(a.y, b.y)), y1 = clampY(Math.max(a.y, b.y));
+            return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+        }
+
+        function voidBadgeAt(p) {
+            if (!lastView) return null;
+            return lastView.voidBadges.find(b => Math.hypot(p.x - b.x, p.y - b.y) <= VOID_BADGE_RADIUS_PX + 2) || null;
+        }
+
+        function deleteVoid(id) {
+            setState({ voids: state.voids.filter(v => v.id !== id) });
+        }
 
         function canvasPoint(e) {
             const rect = canvas.getBoundingClientRect();
@@ -1423,6 +1802,7 @@
             for (let i = tiles.length - 1; i >= 0; i--) {
                 const tile = tiles[i];
                 if (isPointInPolygon(pt, tile.points)) {
+                    if (tile.cut) return; // spares can't be flipped
                     setState({
                         manualOverrides: { ...state.manualOverrides, [tile.overrideKey]: 1 - tile.colorIdx }
                     });
@@ -1445,9 +1825,17 @@
 
         function bindCanvasPointer() {
             canvas.addEventListener('pointerdown', (e) => {
-                if (e.button !== 0 || pointerDrag) return;
+                if (e.button !== 0 || pointerDrag || !lastView) return;
                 const p = canvasPoint(e);
-                pointerDrag = { id: e.pointerId, startX: p.x, startY: p.y, lastX: p.x, lastY: p.y, pan: e.shiftKey, dragging: false };
+                const badge = voidBadgeAt(p);
+                if (badge) {
+                    deleteVoid(badge.id);
+                    return;
+                }
+                pointerDrag = {
+                    id: e.pointerId, startX: p.x, startY: p.y, lastX: p.x, lastY: p.y,
+                    startWall: toWall(lastView, p.x, p.y), pan: e.shiftKey, dragging: false, cancelled: false
+                };
                 try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* synthetic pointer */ }
             });
 
@@ -1464,9 +1852,13 @@
                         nav.panX += p.x - d.lastX;
                         nav.panY += p.y - d.lastY;
                         scheduleRender();
+                    } else if (d.dragging && !d.cancelled) {
+                        voidPreview = voidFromDrag(d.startWall, toWall(lastView, p.x, p.y));
                     }
                     d.lastX = p.x;
                     d.lastY = p.y;
+                } else if (!d) {
+                    canvas.style.cursor = voidBadgeAt(p) ? 'pointer' : '';
                 }
                 scheduleHud();
             });
@@ -1477,7 +1869,12 @@
                 pointerDrag = null;
                 canvas.style.cursor = '';
                 try { canvas.releasePointerCapture(e.pointerId); } catch (err) { /* synthetic pointer */ }
-                if (!cancelled && !d.dragging) flipTileAt(canvasPoint(e));
+                const rect = voidPreview;
+                voidPreview = null;
+                if (!cancelled && !d.cancelled) {
+                    if (!d.dragging) flipTileAt(canvasPoint(e));
+                    else if (!d.pan && rect && rect.w > 0 && rect.h > 0) setState({ voids: [...state.voids, { id: null, ...rect }] });
+                }
                 scheduleHud();
             };
             canvas.addEventListener('pointerup', (e) => endDrag(e, false));
@@ -1487,6 +1884,15 @@
                 if (pointerDrag) return; // captured; keep the HUD state until release
                 hoverPoint = null;
                 scheduleHud();
+            });
+
+            // Escape abandons a void being drawn
+            window.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && pointerDrag && !pointerDrag.pan) {
+                    pointerDrag.cancelled = true;
+                    voidPreview = null;
+                    scheduleHud();
+                }
             });
 
             canvas.addEventListener('wheel', (e) => {
@@ -1526,7 +1932,10 @@
                 c2Sheets: inv.c2Sheets,
                 handSwaps: inv.handSwaps,
                 swapsC1: inv.swappedC1,
-                swapsC2: inv.swappedC2
+                swapsC2: inv.swappedC2,
+                extraC1: inv.extraC1,
+                extraC2: inv.extraC2,
+                voidCount: state.voids.length
             });
 
             renderSavedWallsList();
@@ -1546,8 +1955,12 @@
             let aggSwaps = 0;
             let aggSwapsC1 = 0;
             let aggSwapsC2 = 0;
+            let aggExtraC1 = 0;
+            let aggExtraC2 = 0;
 
             savedWalls.forEach((w, idx) => {
+                aggExtraC1 += w.extraC1;
+                aggExtraC2 += w.extraC2;
                 aggSheets += w.sheetsTotal;
                 aggC1 += w.c1Sheets;
                 aggC2 += w.c2Sheets;
@@ -1559,7 +1972,7 @@
                     <div class="flex items-center justify-between bg-slate-950 p-2 rounded border border-slate-800 text-[11px]">
                         <div>
                             <span class="font-medium text-slate-200">${w.name}</span>
-                            <span class="text-slate-500 block font-mono">C1: ${w.c1Sheets} | C2: ${w.c2Sheets} (${w.sheetsTotal} sheets)</span>
+                            <span class="text-slate-500 block font-mono">C1: ${w.c1Sheets}+${w.extraC1} | C2: ${w.c2Sheets}+${w.extraC2} (${w.sheetsTotal} sheets${w.voidCount ? `, ${w.voidCount} voids` : ''})</span>
                             <span class="text-amber-400 text-[10px] block font-mono">Swaps: ${w.handSwaps} (${w.swapsC1} C1, ${w.swapsC2} C2)</span>
                         </div>
                         <button onclick="removeSavedWall(${idx})" class="text-rose-400 hover:text-rose-300 ml-2">✕</button>
@@ -1567,11 +1980,13 @@
                 `;
             });
 
-            const totalCartons = Math.ceil((aggSheets * 1.10) / 10);
+            // Boxes per color across all walls, with standard waste
+            const boxesC1 = Math.ceil(((aggC1 + aggExtraC1) * WASTE_FACTOR) / SHEETS_PER_BOX);
+            const boxesC2 = Math.ceil(((aggC2 + aggExtraC2) * WASTE_FACTOR) / SHEETS_PER_BOX);
             html += `
                 <div class="pt-2 border-t border-slate-800 font-mono text-[11px] text-cyan-300">
-                    <div>Total Takeoff: ${aggSheets} sheets (${totalCartons} boxes)</div>
-                    <div class="text-slate-400">Total C1: ${aggC1} | Total C2: ${aggC2}</div>
+                    <div>Total Takeoff: ${aggSheets} sheets (${boxesC1 + boxesC2} boxes: ${boxesC1} C1 + ${boxesC2} C2)</div>
+                    <div class="text-slate-400">Total C1: ${aggC1}+${aggExtraC1} extra | Total C2: ${aggC2}+${aggExtraC2} extra</div>
                     <div class="text-amber-400 text-[10px]">Total Swaps: ${aggSwaps} (${aggSwapsC1} C1, ${aggSwapsC2} C2)</div>
                 </div>
             `;
@@ -1611,7 +2026,9 @@
                     seed: state.seed
                 },
                 // Keys are `${col}_f${tierAboveFloor}_${type}`, values 0 (C1, top) or 1 (C2, bottom)
-                manualOverrides: state.manualOverrides
+                manualOverrides: state.manualOverrides,
+                // Inches from the floor at the left wall edge; (x, y) is the bottom-left corner
+                voids: state.voids.map(v => ({ x: v.x, y: v.y, width: v.w, height: v.h }))
             };
             return JSON.stringify(config, null, 2);
         }
@@ -1717,6 +2134,16 @@
                     warnings.push(`${key}: ${JSON.stringify(value)} → ${JSON.stringify(next[key])}`);
                 }
             }
+
+            // Voids (v4+); older configs have none. Trimmed to the imported wall right away.
+            const rawVoids = Array.isArray(parsed.voids) ? parsed.voids : [];
+            const imported = sanitizeVoids(rawVoids.map(v => (v && typeof v === 'object') ? { x: v.x, y: v.y, w: v.width, h: v.height } : null));
+            if (imported.length < rawVoids.length) warnings.push(`${rawVoids.length - imported.length} malformed void(s) dropped`);
+            next.voids = clipVoidsToWall({ ...next, voids: imported });
+            const keptById = new Map(next.voids.map(v => [v.id, v]));
+            const trimmed = imported.filter(v => keptById.has(v.id) && (keptById.get(v.id).w !== v.w || keptById.get(v.id).h !== v.h)).length;
+            if (next.voids.length < imported.length) warnings.push(`${imported.length - next.voids.length} void(s) outside the wall dropped`);
+            if (trimmed) warnings.push(`${trimmed} void(s) trimmed to the wall`);
 
             const rawOverrides = parsed.manualOverrides || {};
             if (version === 1) {
