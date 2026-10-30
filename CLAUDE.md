@@ -17,21 +17,28 @@ Single-file web app (`tile-planner.html`) for planning a tile wall built from Me
 - `manualOverrides` maps `${col}_f${tierAboveFloor}_${type}` → 0|1. The tier is counted up from the floor (`floorRowIndex`), so flips stay put when the tiled height changes. The pattern hashes still use `row` counted from the top, to keep renders identical.
 - Config JSON has `version: 2`. Unversioned (v1) configs are still accepted; their hex/row-from-top overrides are converted. Rejected or clamped fields are listed in the modal instead of being applied silently.
 
+## Render pipeline (done: refactor step 2)
+`renderTiling()` runs `buildSheetGrid(state)` → `assignColors(grid, state)` → `computeInventory(grid)` → `computeView(state, viewport, dpr)` → `renderCanvas(ctx, view, grid, inventory, state)` → `renderDashboard(inventory)`, and keeps `lastGrid` / `lastInventory` / `lastView`.
+- Geometry is in **wall inches**: origin at the floor line on the left wall edge, y up. Tiles have `x`, `y` (center), `points`, `col`, `row` (from the top, used by the pattern hashes), `floorRow`, `overrideKey`.
+- `view` maps inches to CSS px (`scale`, `originX/Y`, the snapped wall rect) plus `dpr`. Use `toScreen(view, x, y)` / `toWall(view, sx, sy)`. `renderCanvas` draws tiles and sheet outlines through one wall-space transform, and text and wall lines in CSS px. Both include `dpr`.
+- The canvas backing store is sized by `devicePixelRatio` and re-renders when it changes. PNG export re-renders off-screen at 4× (longest side capped at 8192 px).
+- `window.planner` exposes `state`, `lastGrid`, `lastInventory`, `lastView`, `setState`.
+- Verifying refactors: compare against the previous version, scenario by scenario, on tile pattern (sheet, col/row/type, color index, center to 1e-5″) and takeoff numbers, which must match exactly. The step-2 transform shifts anti-aliasing on some tile edges (≤ 10/255 per channel), so exact pixel equality is no longer the bar.
+
 ## Known bugs (fix first)
-1. `devicePixelRatio` is ignored: blurry on high-DPI screens, and the PNG export isn't actually high-res.
-2. The Sheet Overlay `<button>` wraps a checkbox, so only the checkbox itself toggles. Use a `<label>`.
-3. `hash2D` uses a float `*` instead of `Math.imul`, losing precision. Fixing it changes every pattern.
+1. The Sheet Overlay `<button>` wraps a checkbox, so only the checkbox itself toggles. Use a `<label>`.
+2. `hash2D` uses a float `*` instead of `Math.imul`, losing precision. Fixing it changes every pattern.
+3. Sheet row count uses `SHEET_HEIGHT_INCHES` (12.13″) while sheets are drawn `SHEET_DRAWN_HEIGHT_INCHES` (~12.124″) tall. Unifying them can change the row count for some tiled heights, so it changes output.
 4. Row parity (cube x-offset) is taken from the row counted from the top, so changing the tiled height by an odd number of tiers shifts the whole layout half a cube sideways.
 
 ## Refactor plan (agreed direction)
 1. ~~Single state object~~ (done)
 2. ~~Color indices (0/1) on tiles~~ (done)
-3. **Pipeline of pure functions** replacing the monolithic `renderTiling()`:
-   `buildSheetGrid(state)` → `assignColors(grid, state)` → `computeInventory(colored, state)` → `renderCanvas(...)` → `renderDashboard(inventory)`.
-4. **Work in inches**, apply one canvas transform at draw time (handles zoom, DPR, and high-res export). Derive sheet height from tile geometry (currently 12.13 constant vs ~12.12 computed).
+3. ~~Pipeline of pure functions~~ (done)
+4. ~~Work in inches with one canvas transform~~ (done). Deriving the sheet height from tile geometry is deferred (known bug 3).
 5. **Fade algorithm registry** (`FADES = { id: { label, params, assign } }`), building the `<select>` from it. Named params replace magic numbers.
 6. Split into ES modules: constants, noise, geometry, fades/*, inventory, state, config, renderer, ui/controls, ui/takeoff.
-7. Saved walls should store the inventory object and full config (not values parsed back from DOM text). Use event delegation instead of inline `onclick` and the `window.removeSavedWall` global.
+7. Saved walls should store the full config (their counts now come from `lastInventory`, not DOM text). Use event delegation instead of inline `onclick` and the `window.removeSavedWall` global.
 
 Constraint: for the same seed and settings, the refactored version should render the identical pattern, so before/after can be compared.
 
@@ -76,7 +83,6 @@ Came from a feature audit written with Gemini; rebuilt here on the state model, 
 ## Debugging aids to add
 - Debug overlay: boundary curve, transition band edges, tile (col,row,type) labels.
 - Hover inspector: tile ID, sheet #, distance to boundary, reason for color (base/tooth/rogue/override).
-- `window.planner = { state, lastGrid, lastInventory }`.
 - Snapshot tests of the pure stages using fixed seeds.
 
 ## UX backlog
@@ -86,10 +92,10 @@ Came from a feature audit written with Gemini; rebuilt here on the state model, 
 
 ## Suggested order
 1. ~~State object, color indices, clamping, stable override keys~~ (done)
-2. Pipeline split, inches-based geometry with one canvas transform, DPR fix, `window.planner`. Output must stay pixel-identical (verify against the snapshot baseline).
-3. Interaction foundation: pointer handling (3px click/drag split, Shift+drag pan, wheel zoom, Fit), screen↔inch mapping, cursor HUD. The default view must still match the baseline.
+2. ~~Pipeline split, inches geometry, DPR fix, `window.planner`~~ (done)
+3. Interaction foundation: pointer handling (3px click/drag split, Shift+drag pan, wheel zoom, Fit), screen↔inch mapping, cursor HUD. At default zoom, pattern and takeoff must still match.
 4. Voids, cut-tile rendering, sheet culling, new takeoff math, spec card update, clean high-res PNG. Output changes on purpose here, so take a new snapshot baseline once it's verified.
 5. Autosave/URL sharing, undo (covers voids), debug overlay, confirm before Re-Seed.
 6. Fade registry, module split, per-sheet swap map.
 
-Why features wait until after steps 2–3: they change output on purpose, which ends the pixel-identical check the refactors rely on. They also depend on the inches transform and the pipeline stages.
+Why features wait until after steps 2–3: they change output on purpose, which ends the before/after pattern check the refactors rely on. They also depend on the inches transform and the pipeline stages.

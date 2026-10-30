@@ -394,6 +394,22 @@
         const CUBE_DX_INCHES = SHEET_WIDTH_INCHES / 3.0 / 2.0;
         const CUBE_DY_INCHES = CUBE_DX_INCHES / Math.sqrt(3.0);
         const TIER_STEP_INCHES = 3.0 * CUBE_DY_INCHES;
+        const CUBE_STEP_X_INCHES = SHEET_WIDTH_INCHES / 3.0;             // 3.50″ per cube
+        // Height of a sheet as drawn (~12.12″). Sheet row count still uses SHEET_HEIGHT_INCHES.
+        const SHEET_DRAWN_HEIGHT_INCHES = 4 * TIER_STEP_INCHES;
+        const TYPE_INDEX = { top: 1, left: 2, right: 3 };
+
+        // Layout
+        const MARGIN_INCHES = 6.0;
+        const LEFT_OFFSET_INCHES = 1.875; // 1 tile + grout offset to envelope left wall edge
+        const MIN_PX_PER_INCH = 4.0;
+        const MAX_PX_PER_INCH = 18.0;
+        const EXPORT_PIXEL_DENSITY = 4;   // PNG export renders at 4× CSS pixels...
+        const EXPORT_MAX_PIXELS = 8192;   // ...capped so the longest side stays within this
+
+        // Takeoff
+        const SHEETS_PER_BOX = 10;
+        const WASTE_FACTOR = 1.10;
 
         const ALGORITHMS = ['lightning', 'bayer', 'cellular', 'glitch', 'blueNoise'];
         const CONFIG_VERSION = 2;
@@ -536,8 +552,6 @@
         const configJsonTextarea = document.getElementById('configJsonTextarea');
         const configStatusMsg = document.getElementById('configStatusMsg');
 
-        let renderedTiles = [];
-
         // High-entropy 64-bit Murmur-style integer bit mixer for non-repeating noise
         function hashScatter(col, row, typeIdx, seed) {
             let h = (seed ^ Math.imul(col, 0x9e3779b9) ^ Math.imul(row, 0x85ebca6b) ^ Math.imul(typeIdx, 0xc2b2ae35)) >>> 0;
@@ -569,9 +583,9 @@
             return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
         }
 
-        function getNormalizedZones() {
-            let f = state.floorPercent;
-            let t = state.transPercent;
+        function getNormalizedZones(s = state) {
+            let f = s.floorPercent;
+            let t = s.transPercent;
             if (f + t > 98) {
                 t = 98 - f;
             }
@@ -635,268 +649,333 @@
             animationFrameId = requestAnimationFrame(renderTiling);
         }
 
+        // Last pipeline outputs, kept for hit-testing, export, saved walls and debugging
+        let lastGrid = null;
+        let lastInventory = null;
+        let lastView = null;
+
         function renderTiling() {
-            const zones = getNormalizedZones();
-            const { wallWidthInches, wallTotalHeightInches, tiledHeightInches, outlierPct, showSheetOverlay, manualOverrides } = state;
-            const selectedAlgorithm = state.algorithm;
-            const currentSeed = state.seed;
+            const grid = buildSheetGrid(state);
+            assignColors(grid, state);
+            const inventory = computeInventory(grid);
 
-            // Tiles carry color indices; hex is resolved only when drawing
-            const c1 = state.colorTile1;
-            const c2 = state.colorTile2;
-            const palette = [c1, c2];
-            const cPaint = state.colorPaint;
-            const cGrout = state.colorGrout;
+            const view = computeView(
+                state,
+                canvasWrapper.parentElement.clientWidth - 48,
+                canvasWrapper.parentElement.clientHeight - 48,
+                window.devicePixelRatio || 1
+            );
+            canvas.width = Math.round(view.cssWidth * view.dpr);
+            canvas.height = Math.round(view.cssHeight * view.dpr);
+            canvas.style.width = view.cssWidth + 'px';
+            canvas.style.height = view.cssHeight + 'px';
 
-            // Geometry calculations
-            const marginInches = 6.0;
-            const leftOffsetInches = 1.875; // 1 tile + grout offset to envelope left wall edge
+            renderCanvas(ctx, view, grid, inventory, state);
+            renderDashboard(inventory);
 
-            const boundingWidthInches = wallWidthInches + leftOffsetInches + (marginInches * 2);
-            const boundingHeightInches = wallTotalHeightInches + (marginInches * 2);
+            lastGrid = grid;
+            lastInventory = inventory;
+            lastView = view;
+        }
 
-            // Container sizing
-            const maxDisplayWidth = canvasWrapper.parentElement.clientWidth - 48;
-            const maxDisplayHeight = canvasWrapper.parentElement.clientHeight - 48;
+        // --- Pipeline stage 1: sheet grid ---
+        // All geometry is in wall inches: origin at the floor line on the left wall edge, y up.
 
-            let scale = Math.min(maxDisplayWidth / boundingWidthInches, maxDisplayHeight / boundingHeightInches);
-            scale = Math.max(4.0, Math.min(18.0, scale));
+        // The 3 rhombuses of one isometric cube whose shared vertex is (cx, cy)
+        function cubeRhombi(cx, cy) {
+            const dx = CUBE_DX_INCHES;
+            const dy = CUBE_DY_INCHES;
+            return [
+                {
+                    type: 'top',
+                    x: cx,
+                    y: cy + dy,
+                    points: [
+                        { x: cx, y: cy + 2 * dy },
+                        { x: cx + dx, y: cy + dy },
+                        { x: cx, y: cy },
+                        { x: cx - dx, y: cy + dy }
+                    ]
+                },
+                {
+                    type: 'left',
+                    x: cx - (dx * 0.5),
+                    y: cy - (dy * 0.5),
+                    points: [
+                        { x: cx - dx, y: cy + dy },
+                        { x: cx, y: cy },
+                        { x: cx, y: cy - 2 * dy },
+                        { x: cx - dx, y: cy - dy }
+                    ]
+                },
+                {
+                    type: 'right',
+                    x: cx + (dx * 0.5),
+                    y: cy - (dy * 0.5),
+                    points: [
+                        { x: cx, y: cy },
+                        { x: cx + dx, y: cy + dy },
+                        { x: cx + dx, y: cy - dy },
+                        { x: cx, y: cy - 2 * dy }
+                    ]
+                }
+            ];
+        }
 
-            const canvasWidth = Math.round(boundingWidthInches * scale);
-            const canvasHeight = Math.round(boundingHeightInches * scale);
+        // Sheets are anchored at the tile line and laid out top-down, starting LEFT_OFFSET_INCHES
+        // left of the wall edge. Sheets that miss the wall entirely are skipped.
+        function buildSheetGrid(s) {
+            const wallWidth = s.wallWidthInches;
+            const tiledHeight = s.tiledHeightInches;
 
-            canvas.width = canvasWidth;
-            canvas.height = canvasHeight;
-            canvas.style.width = canvasWidth + 'px';
-            canvas.style.height = canvasHeight + 'px';
+            const gridLeft = -LEFT_OFFSET_INCHES;
+            const cols = Math.ceil((wallWidth + LEFT_OFFSET_INCHES) / SHEET_WIDTH_INCHES);
+            const rows = Math.ceil(tiledHeight / SHEET_HEIGHT_INCHES);
 
-            const pxPerInch = scale;
+            const sheets = [];
+            const tiles = [];
 
-            // Wall coordinate benchmarks
-            const wallLeftX = Math.round((marginInches + leftOffsetInches) * pxPerInch);
-            const wallRightX = Math.round(wallLeftX + (wallWidthInches * pxPerInch));
-            const renderedWallWidth = wallRightX - wallLeftX;
+            for (let sRow = 0; sRow < rows; sRow++) {
+                const top = tiledHeight - (sRow * SHEET_DRAWN_HEIGHT_INCHES);
+                const bottom = top - SHEET_DRAWN_HEIGHT_INCHES;
 
-            const wallFloorY = Math.round((marginInches + wallTotalHeightInches) * pxPerInch);
-            const wallCeilingY = Math.round(marginInches * pxPerInch);
-            const renderedTotalHeight = wallFloorY - wallCeilingY;
+                for (let sCol = 0; sCol < cols; sCol++) {
+                    const left = gridLeft + (sCol * SHEET_WIDTH_INCHES);
+                    const right = left + SHEET_WIDTH_INCHES;
 
-            const tiledHeightPx = tiledHeightInches * pxPerInch;
-            const tiledTopY = wallFloorY - tiledHeightPx;
-
-            // 1. Fill entire canvas background with painted wall color
-            ctx.fillStyle = cPaint;
-            ctx.fillRect(0, 0, canvasWidth, canvasHeight);
-
-            // 2. Draw wall drywall fill
-            ctx.fillStyle = cPaint;
-            ctx.fillRect(wallLeftX, wallCeilingY, renderedWallWidth, renderedTotalHeight);
-
-            // Merola isometric rhombus layout
-            // 3 tumbling cubes form 10.5" width
-            const cubeWidthInches = SHEET_WIDTH_INCHES / 3.0; // 3.50"
-            const stepX = cubeWidthInches * pxPerInch;
-            const dx = stepX / 2.0;
-            const dy = dx / Math.sqrt(3.0);
-            const stepY = 3.0 * dy; // 4 tiers = 12.13" sheet height
-
-            const sheetWidthPx = 3 * stepX;
-            const sheetHeightPx = 4 * stepY;
-
-            // Anchor sheets at top tile line and start left margin offset
-            const gridStartX = wallLeftX - (leftOffsetInches * pxPerInch);
-            const gridStartY = tiledTopY;
-
-            const neededSheetCols = Math.ceil((wallWidthInches + leftOffsetInches) / SHEET_WIDTH_INCHES);
-            const neededSheetRows = Math.ceil(tiledHeightInches / SHEET_HEIGHT_INCHES);
-
-            const tileCandidates = [];
-            const sheetManifest = [];
-            renderedTiles = [];
-
-            // Transition vertical ranges
-            const floorSpanPx = (zones.floorPct / 100) * tiledHeightPx;
-            const transSpanPx = Math.max(dy * 2, (zones.transPct / 100) * tiledHeightPx);
-            const transCenterDistFromFloor = floorSpanPx + (transSpanPx * 0.5);
-
-            // Construct 36-tile sheets top-down
-            for (let sRow = 0; sRow < neededSheetRows; sRow++) {
-                const sheetTopY = gridStartY + (sRow * sheetHeightPx);
-                const sheetBottomY = sheetTopY + sheetHeightPx;
-
-                for (let sCol = 0; sCol < neededSheetCols; sCol++) {
-                    const sheetLeftX = gridStartX + (sCol * sheetWidthPx);
-                    const sheetRightX = sheetLeftX + sheetWidthPx;
-
-                    // Exclude sheets that do not intersect wall
-                    const sheetIntersectsWall = (sheetRightX > wallLeftX) && 
-                                                (sheetLeftX < wallRightX) && 
-                                                (sheetBottomY > tiledTopY) && 
-                                                (sheetTopY < wallFloorY);
-
+                    // Sheets start at the tile line, so only the floor and side edges can miss
+                    const sheetIntersectsWall = (right > 0) && (left < wallWidth) && (top > 0);
                     if (!sheetIntersectsWall) continue;
 
-                    const sheetId = sheetManifest.length + 1;
+                    const sheetId = sheets.length + 1;
                     const sheetTiles = [];
 
                     for (let localR = 0; localR < 4; localR++) {
-                        const globalR = sRow * 4 + localR;
-                        const floorRow = floorRowIndex(globalR, tiledHeightInches);
-                        const cy = sheetTopY + (localR * stepY) + dy;
+                        const row = sRow * 4 + localR;
+                        const floorRow = floorRowIndex(row, tiledHeight);
+                        const cy = top - (localR * TIER_STEP_INCHES) - CUBE_DY_INCHES;
 
                         for (let localC = 0; localC < 3; localC++) {
-                            const globalC = sCol * 3 + localC;
-                            // Top row (even globalR) offsets to the right (+dx) relative to the second row
-                            const rowOffset = (globalR % 2 === 0) ? dx : 0;
-                            const cx = sheetLeftX + (localC * stepX) + rowOffset + dx;
+                            const col = sCol * 3 + localC;
+                            // Top row (even row) offsets to the right (+dx) relative to the second row
+                            const rowOffset = (row % 2 === 0) ? CUBE_DX_INCHES : 0;
+                            const cx = left + (localC * CUBE_STEP_X_INCHES) + rowOffset + CUBE_DX_INCHES;
 
-                            // 3 Rhombuses forming isometric cube
-                            const topRhomb = {
-                                type: 'top',
-                                centerX: cx,
-                                centerY: cy - dy,
-                                points: [
-                                    { x: cx, y: cy - 2 * dy },
-                                    { x: cx + dx, y: cy - dy },
-                                    { x: cx, y: cy },
-                                    { x: cx - dx, y: cy - dy }
-                                ]
-                            };
-
-                            const leftRhomb = {
-                                type: 'left',
-                                centerX: cx - (dx * 0.5),
-                                centerY: cy + (dy * 0.5),
-                                points: [
-                                    { x: cx - dx, y: cy - dy },
-                                    { x: cx, y: cy },
-                                    { x: cx, y: cy + 2 * dy },
-                                    { x: cx - dx, y: cy + dy }
-                                ]
-                            };
-
-                            const rightRhomb = {
-                                type: 'right',
-                                centerX: cx + (dx * 0.5),
-                                centerY: cy + (dy * 0.5),
-                                points: [
-                                    { x: cx, y: cy },
-                                    { x: cx + dx, y: cy - dy },
-                                    { x: cx + dx, y: cy + dy },
-                                    { x: cx, y: cy + 2 * dy }
-                                ]
-                            };
-
-                            const rhombi = [topRhomb, leftRhomb, rightRhomb];
-
-                            for (const rhomb of rhombi) {
-                                const distAboveFloor = wallFloorY - rhomb.centerY;
-                                const normX = (rhomb.centerX - wallLeftX) / renderedWallWidth;
-                                const normYInTile = Math.max(0, Math.min(1, distAboveFloor / tiledHeightPx));
-
-                                const candidate = {
+                            for (const rhomb of cubeRhombi(cx, cy)) {
+                                const tile = {
                                     ...rhomb,
                                     sheetId,
-                                    col: globalC,
-                                    row: globalR,
+                                    col,
+                                    row,
                                     floorRow,
                                     localCol: localC,
-                                    normX,
-                                    normY: normYInTile,
-                                    distAboveFloor,
-                                    worldXInches: (rhomb.centerX - wallLeftX) / pxPerInch,
-                                    worldYInches: distAboveFloor / pxPerInch
+                                    overrideKey: overrideKey(col, floorRow, rhomb.type)
                                 };
-
-                                tileCandidates.push(candidate);
-                                sheetTiles.push(candidate);
+                                tiles.push(tile);
+                                sheetTiles.push(tile);
                             }
                         }
                     }
 
-                    sheetManifest.push({
-                        id: sheetId,
-                        sCol,
-                        sRow,
-                        left: sheetLeftX,
-                        top: sheetTopY,
-                        right: sheetRightX,
-                        bottom: sheetBottomY,
-                        tiles: sheetTiles
-                    });
+                    sheets.push({ id: sheetId, sCol, sRow, left, right, top, bottom, tiles: sheetTiles });
                 }
             }
 
-            // Procedural Color Assignment
-            tileCandidates.forEach(tile => {
+            return { cols, rows, sheets, tiles };
+        }
+
+        // --- Pipeline stage 2: color assignment ---
+        // Sets tile.baseColorIdx (procedural) and tile.colorIdx (after manual overrides); 0 = C1, 1 = C2.
+        function assignColors(grid, s) {
+            const zones = getNormalizedZones(s);
+            const seed = s.seed;
+            const tiledHeight = s.tiledHeightInches;
+
+            // Transition vertical ranges
+            const floorSpan = (zones.floorPct / 100) * tiledHeight;
+            const transSpan = Math.max(CUBE_DY_INCHES * 2, (zones.transPct / 100) * tiledHeight);
+            const transCenterAboveFloor = floorSpan + (transSpan * 0.5);
+            const halfZone = transSpan * 0.5;
+
+            for (const tile of grid.tiles) {
                 // Procedural jagged boundary in transition zone with non-repeating world-space noise octaves
-                const wx = tile.worldXInches;
-                const n1 = smoothNoise(wx * 0.055, 1.3, currentSeed);
-                const n2 = smoothNoise(wx * 0.125, 4.7, currentSeed + 101);
-                const n3 = smoothNoise(wx * 0.280, 8.2, currentSeed + 503);
-                const n4 = smoothNoise(wx * 0.650, 13.9, currentSeed + 919);
+                const wx = tile.x;
+                const n1 = smoothNoise(wx * 0.055, 1.3, seed);
+                const n2 = smoothNoise(wx * 0.125, 4.7, seed + 101);
+                const n3 = smoothNoise(wx * 0.280, 8.2, seed + 503);
+                const n4 = smoothNoise(wx * 0.650, 13.9, seed + 919);
                 const displacement = (n1 - 0.5) * 0.50 + (n2 - 0.5) * 0.28 + (n3 - 0.5) * 0.15 + (n4 - 0.5) * 0.07;
-                const boundaryDistFromFloor = transCenterDistFromFloor + displacement * transSpanPx;
+                const boundaryAboveFloor = transCenterAboveFloor + displacement * transSpan;
 
-                const distToBoundary = tile.distAboveFloor - boundaryDistFromFloor;
-                const halfZone = transSpanPx * 0.5;
+                const distToBoundary = tile.y - boundaryAboveFloor;
                 const isOutsideZone = Math.abs(distToBoundary) > halfZone;
+                tile.distToBoundary = distToBoundary;
 
-                const typeIdx = tile.type === 'top' ? 1 : tile.type === 'left' ? 2 : 3;
+                const typeIdx = TYPE_INDEX[tile.type];
 
                 // Base color index selection: 0 = C1, 1 = C2
-                if (selectedAlgorithm === 'lightning') {
-                    const toothSeed = hashScatter(tile.col, tile.row, typeIdx + 11, currentSeed);
-                    const toothReach = transSpanPx * 0.48;
+                if (s.algorithm === 'lightning') {
+                    const toothSeed = hashScatter(tile.col, tile.row, typeIdx + 11, seed);
+                    const toothReach = transSpan * 0.48;
 
                     if (distToBoundary < 0) {
                         tile.baseColorIdx = (distToBoundary > -toothReach && toothSeed < 0.25) ? 1 : 0;
                     } else {
                         tile.baseColorIdx = (distToBoundary < toothReach && toothSeed < 0.25) ? 0 : 1;
                     }
-                } else if (selectedAlgorithm === 'bayer') {
+                } else if (s.algorithm === 'bayer') {
                     const bayerVal = BAYER_4X4[Math.abs(tile.row) % 4][Math.abs(tile.col) % 4];
-                    const rawGradient = Math.max(0, Math.min(1, 0.5 + distToBoundary / (transSpanPx * 1.05)));
+                    const rawGradient = Math.max(0, Math.min(1, 0.5 + distToBoundary / (transSpan * 1.05)));
                     tile.baseColorIdx = (rawGradient > bayerVal) ? 1 : 0;
-                } else if (selectedAlgorithm === 'glitch') {
-                    const rowGlitch = hash2D(tile.row * 97, 13, currentSeed);
+                } else if (s.algorithm === 'glitch') {
+                    const rowGlitch = hash2D(tile.row * 97, 13, seed);
                     const isGlitchRow = rowGlitch > 0.76;
-                    const shiftOffset = isGlitchRow ? (hash2D(tile.row, 71, currentSeed) - 0.5) * 0.55 * transSpanPx : 0;
+                    const shiftOffset = isGlitchRow ? (hash2D(tile.row, 71, seed) - 0.5) * 0.55 * transSpan : 0;
                     const effectiveDist = distToBoundary + shiftOffset;
                     tile.baseColorIdx = (effectiveDist > 0) ? 1 : 0;
-                } else if (selectedAlgorithm === 'cellular') {
-                    const clusterNoise = smoothNoise(tile.worldXInches * 0.18, tile.worldYInches * 0.18, currentSeed + 42);
-                    const effectiveDist = distToBoundary + (clusterNoise - 0.5) * transSpanPx * 0.85;
+                } else if (s.algorithm === 'cellular') {
+                    const clusterNoise = smoothNoise(tile.x * 0.18, tile.y * 0.18, seed + 42);
+                    const effectiveDist = distToBoundary + (clusterNoise - 0.5) * transSpan * 0.85;
                     tile.baseColorIdx = (effectiveDist > 0) ? 1 : 0;
                 } else {
-                    const staticNoise = hashScatter(tile.col, tile.row, typeIdx + 37, currentSeed);
-                    const t = Math.max(0, Math.min(1, 0.5 + distToBoundary / (transSpanPx * 1.05)));
+                    const staticNoise = hashScatter(tile.col, tile.row, typeIdx + 37, seed);
+                    const t = Math.max(0, Math.min(1, 0.5 + distToBoundary / (transSpan * 1.05)));
                     tile.baseColorIdx = (t + (staticNoise - 0.5) * 0.35 > 0.5) ? 1 : 0;
                 }
 
                 // Rogue noise strictly swaps random tiles outside the transition zone
-                if (isOutsideZone && outlierPct > 0) {
-                    const rogueRand = hashScatter(tile.col, tile.row, typeIdx + 79, currentSeed + 9973);
-                    const rogueThreshold = outlierPct / 100.0;
+                if (isOutsideZone && s.outlierPct > 0) {
+                    const rogueRand = hashScatter(tile.col, tile.row, typeIdx + 79, seed + 9973);
+                    const rogueThreshold = s.outlierPct / 100.0;
                     if (rogueRand < rogueThreshold) {
-                        tile.baseColorIdx = (tile.distAboveFloor < boundaryDistFromFloor) ? 1 : 0;
+                        tile.baseColorIdx = (tile.y < boundaryAboveFloor) ? 1 : 0;
                     }
                 }
 
                 // Apply manual override if set
-                tile.overrideKey = overrideKey(tile.col, tile.floorRow, tile.type);
-                const override = manualOverrides[tile.overrideKey];
+                const override = s.manualOverrides[tile.overrideKey];
                 tile.colorIdx = (override !== undefined) ? override : tile.baseColorIdx;
-            });
+            }
+        }
 
-            renderedTiles = tileCandidates;
+        // --- Pipeline stage 3: inventory (majority rule & hand-swapped tiles) ---
+        // Also labels each sheet with majorityIdx / minorityIdx / minorityCount / isMixed.
+        function computeInventory(grid) {
+            let c1Sheets = 0;
+            let c2Sheets = 0;
+            let handSwaps = 0;
+            let swappedC1 = 0; // C1 tiles placed on C2 majority sheets
+            let swappedC2 = 0; // C2 tiles placed on C1 majority sheets
 
-            // Render Tiles to Canvas
+            for (const sheet of grid.sheets) {
+                let c1Count = 0;
+                let c2Count = 0;
+                for (const t of sheet.tiles) {
+                    if (t.colorIdx === 0) c1Count++;
+                    else c2Count++;
+                }
+
+                // Default to C1 if equal (18/18)
+                if (c1Count >= c2Count) {
+                    c1Sheets++;
+                    handSwaps += c2Count;
+                    swappedC2 += c2Count;
+                    sheet.majorityIdx = 0;
+                    sheet.minorityIdx = 1;
+                    sheet.minorityCount = c2Count;
+                } else {
+                    c2Sheets++;
+                    handSwaps += c1Count;
+                    swappedC1 += c1Count;
+                    sheet.majorityIdx = 1;
+                    sheet.minorityIdx = 0;
+                    sheet.minorityCount = c1Count;
+                }
+                sheet.isMixed = (c1Count > 0 && c2Count > 0);
+            }
+
+            const totalSheets = grid.sheets.length;
+            return {
+                totalSheets,
+                gridCols: grid.cols,
+                gridRows: grid.rows,
+                c1Sheets,
+                c2Sheets,
+                handSwaps,
+                swappedC1,
+                swappedC2,
+                // Boxes to order with standard waste
+                boxes: Math.ceil((totalSheets * WASTE_FACTOR) / SHEETS_PER_BOX)
+            };
+        }
+
+        // --- Pipeline stage 4: view (inches → CSS px) ---
+        // Fits the wall plus margins into the viewport. The wall rectangle is snapped to whole
+        // CSS pixels so its edges stay crisp; the wall origin sits on the snapped floor/left corner.
+        function computeView(s, maxDisplayWidth, maxDisplayHeight, dpr) {
+            const boundingWidthInches = s.wallWidthInches + LEFT_OFFSET_INCHES + (MARGIN_INCHES * 2);
+            const boundingHeightInches = s.wallTotalHeightInches + (MARGIN_INCHES * 2);
+
+            let scale = Math.min(maxDisplayWidth / boundingWidthInches, maxDisplayHeight / boundingHeightInches);
+            scale = Math.max(MIN_PX_PER_INCH, Math.min(MAX_PX_PER_INCH, scale));
+
+            const wallLeftX = Math.round((MARGIN_INCHES + LEFT_OFFSET_INCHES) * scale);
+            const wallFloorY = Math.round((MARGIN_INCHES + s.wallTotalHeightInches) * scale);
+
+            return {
+                scale,      // CSS px per inch
+                dpr,        // device px per CSS px
+                cssWidth: Math.round(boundingWidthInches * scale),
+                cssHeight: Math.round(boundingHeightInches * scale),
+                originX: wallLeftX,
+                originY: wallFloorY,
+                wallLeftX,
+                wallRightX: Math.round(wallLeftX + (s.wallWidthInches * scale)),
+                wallFloorY,
+                wallCeilingY: Math.round(MARGIN_INCHES * scale),
+                tiledTopY: wallFloorY - (s.tiledHeightInches * scale)
+            };
+        }
+
+        function toScreen(view, x, y) {
+            return { x: view.originX + x * view.scale, y: view.originY - y * view.scale };
+        }
+
+        function toWall(view, screenX, screenY) {
+            return { x: (screenX - view.originX) / view.scale, y: (view.originY - screenY) / view.scale };
+        }
+
+        // --- Pipeline stage 5: canvas ---
+        // Tiles and sheet outlines are drawn in wall inches through one transform; text, badges and
+        // wall lines are drawn in CSS px. Both include view.dpr, so the same code renders the
+        // on-screen canvas and the high-res export.
+        function renderCanvas(ctx, view, grid, inventory, s) {
+            const { scale, dpr } = view;
+            const useScreenSpace = () => ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            const useWallSpace = () => ctx.setTransform(dpr * scale, 0, 0, -dpr * scale, dpr * view.originX, dpr * view.originY);
+
+            const palette = [s.colorTile1, s.colorTile2];
+            const { wallLeftX, wallRightX, wallFloorY, wallCeilingY, tiledTopY } = view;
+            const renderedWallWidth = wallRightX - wallLeftX;
+            const renderedTotalHeight = wallFloorY - wallCeilingY;
+
+            useScreenSpace();
+
+            // 1. Fill entire canvas background with painted wall color
+            ctx.fillStyle = s.colorPaint;
+            ctx.fillRect(0, 0, view.cssWidth, view.cssHeight);
+
+            // 2. Draw wall drywall fill
+            ctx.fillStyle = s.colorPaint;
+            ctx.fillRect(wallLeftX, wallCeilingY, renderedWallWidth, renderedTotalHeight);
+
+            // 3. Tiles
             ctx.lineJoin = 'round';
-            ctx.lineWidth = Math.max(0.75, scale * (1.0 / 16.0));
-            ctx.strokeStyle = cGrout;
+            useWallSpace();
+            ctx.lineWidth = Math.max(0.75, scale * (1.0 / 16.0)) / scale;
+            ctx.strokeStyle = s.colorGrout;
 
-            for (const tile of tileCandidates) {
+            for (const tile of grid.tiles) {
                 ctx.beginPath();
                 ctx.moveTo(tile.points[0].x, tile.points[0].y);
                 ctx.lineTo(tile.points[1].x, tile.points[1].y);
@@ -909,97 +988,57 @@
                 ctx.stroke();
             }
 
-            // Sheet Inventory Analysis (Majority Rule & Hand-Swapped Tiles)
-            let totalC1MajoritySheets = 0;
-            let totalC2MajoritySheets = 0;
-            let totalHandSwaps = 0;
-            let swappedC1Count = 0; // C1 tiles placed on C2 majority sheets
-            let swappedC2Count = 0; // C2 tiles placed on C1 majority sheets
+            // 4. Sheet outlines and badges
+            if (s.showSheetOverlay) {
+                const edgeKey = (p1, p2) => {
+                    const x1 = Math.round(p1.x * 1e4), y1 = Math.round(p1.y * 1e4);
+                    const x2 = Math.round(p2.x * 1e4), y2 = Math.round(p2.y * 1e4);
+                    return (x1 < x2 || (x1 === x2 && y1 < y2))
+                        ? `${x1},${y1}_${x2},${y2}`
+                        : `${x2},${y2}_${x1},${y1}`;
+                };
 
-            sheetManifest.forEach(sheet => {
-                let c1Count = 0;
-                let c2Count = 0;
-
-                sheet.tiles.forEach(t => {
-                    if (t.colorIdx === 0) c1Count++;
-                    else c2Count++;
-                });
-
-                // Default to C1 if equal (18/18)
-                const isC1Majority = (c1Count >= c2Count);
-                if (isC1Majority) {
-                    totalC1MajoritySheets++;
-                    totalHandSwaps += c2Count;
-                    swappedC2Count += c2Count;
-                    sheet.majorityIdx = 0;
-                    sheet.minorityCount = c2Count;
-                    sheet.minorityIdx = 1;
-                } else {
-                    totalC2MajoritySheets++;
-                    totalHandSwaps += c1Count;
-                    swappedC1Count += c1Count;
-                    sheet.majorityIdx = 1;
-                    sheet.minorityCount = c1Count;
-                    sheet.minorityIdx = 0;
-                }
-                sheet.isMixed = (c1Count > 0 && c2Count > 0);
-            });
-
-            // Draw Sheet Outlines if Enabled
-            if (showSheetOverlay) {
-                sheetManifest.forEach(sheet => {
-                    const edgeMap = new Map();
-                    const edgeKey = (p1, p2) => {
-                        const x1 = Math.round(p1.x * 2) / 2;
-                        const y1 = Math.round(p1.y * 2) / 2;
-                        const x2 = Math.round(p2.x * 2) / 2;
-                        const y2 = Math.round(p2.y * 2) / 2;
-                        return (x1 < x2 || (x1 === x2 && y1 < y2))
-                            ? `${x1},${y1}_${x2},${y2}`
-                            : `${x2},${y2}_${x1},${y1}`;
-                    };
-
-                    sheet.tiles.forEach(tile => {
+                for (const sheet of grid.sheets) {
+                    const edgeCounts = new Map();
+                    for (const tile of sheet.tiles) {
                         const pts = tile.points;
                         for (let i = 0; i < pts.length; i++) {
-                            const pA = pts[i];
-                            const pB = pts[(i + 1) % pts.length];
-                            const key = edgeKey(pA, pB);
-                            edgeMap.set(key, (edgeMap.get(key) || 0) + 1);
+                            const key = edgeKey(pts[i], pts[(i + 1) % pts.length]);
+                            edgeCounts.set(key, (edgeCounts.get(key) || 0) + 1);
                         }
-                    });
+                    }
 
-                    // Draw the interlocking perimeter
-                    ctx.save();
-                    ctx.lineWidth = 2.2;
                     // Orange outline for Color 1 base; Blue outline for Color 2 base
                     const isC1 = (sheet.majorityIdx === 0);
+
+                    // Draw the interlocking perimeter (edges used by only one tile)
+                    ctx.save();
+                    useWallSpace();
+                    ctx.lineWidth = 2.2 / scale;
                     ctx.strokeStyle = isC1 ? '#f59e0b' : '#38bdf8';
                     ctx.beginPath();
-
-                    sheet.tiles.forEach(tile => {
+                    for (const tile of sheet.tiles) {
                         const pts = tile.points;
                         for (let i = 0; i < pts.length; i++) {
                             const pA = pts[i];
                             const pB = pts[(i + 1) % pts.length];
-                            const key = edgeKey(pA, pB);
-                            if (edgeMap.get(key) === 1) { // Outer edge of sheet
+                            if (edgeCounts.get(edgeKey(pA, pB)) === 1) {
                                 ctx.moveTo(pA.x, pA.y);
                                 ctx.lineTo(pB.x, pB.y);
                             }
                         }
-                    });
+                    }
                     ctx.stroke();
 
                     // Sheet center badge
+                    useScreenSpace();
                     let avgX = 0, avgY = 0;
-                    sheet.tiles.forEach(t => { avgX += t.centerX; avgY += t.centerY; });
-                    const badgeX = avgX / sheet.tiles.length;
-                    const badgeY = avgY / sheet.tiles.length;
+                    for (const t of sheet.tiles) { avgX += t.x; avgY += t.y; }
+                    const badge = toScreen(view, avgX / sheet.tiles.length, avgY / sheet.tiles.length);
 
                     ctx.fillStyle = isC1 ? 'rgba(245, 158, 11, 0.95)' : 'rgba(14, 165, 233, 0.95)';
                     ctx.beginPath();
-                    ctx.roundRect(badgeX - 18, badgeY - 10, 36, 20, 4);
+                    ctx.roundRect(badge.x - 18, badge.y - 10, 36, 20, 4);
                     ctx.fill();
                     ctx.strokeStyle = '#ffffff';
                     ctx.lineWidth = 1;
@@ -1009,11 +1048,13 @@
                     ctx.font = '600 10px JetBrains Mono, monospace';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
-                    ctx.fillText('#' + sheet.id, badgeX, badgeY);
+                    ctx.fillText('#' + sheet.id, badge.x, badge.y);
 
                     ctx.restore();
-                });
+                }
             }
+
+            useScreenSpace();
 
             // Red Dashed Lines for Exact Physical Wall Dimensions
             ctx.save();
@@ -1035,16 +1076,16 @@
             ctx.font = 'bold 11px JetBrains Mono, monospace';
             ctx.textAlign = 'left';
             ctx.textBaseline = 'bottom';
-            ctx.fillText(`WALL WIDTH: ${wallWidthInches}″`, wallLeftX + 6, wallCeilingY - 6);
+            ctx.fillText(`WALL WIDTH: ${s.wallWidthInches}″`, wallLeftX + 6, wallCeilingY - 6);
 
             ctx.textAlign = 'right';
-            ctx.fillText(`CEILING: ${wallTotalHeightInches}″`, wallRightX - 6, wallCeilingY - 6);
+            ctx.fillText(`CEILING: ${s.wallTotalHeightInches}″`, wallRightX - 6, wallCeilingY - 6);
 
             ctx.textBaseline = 'top';
             ctx.fillText(`FLOOR LINE (0″)`, wallRightX - 6, wallFloorY + 6);
 
             ctx.textAlign = 'left';
-            ctx.fillText(`TILE LINE (${tiledHeightInches}″)`, wallLeftX + 6, tiledTopY + 6);
+            ctx.fillText(`TILE LINE (${s.tiledHeightInches}″)`, wallLeftX + 6, tiledTopY + 6);
             ctx.restore();
 
             // Render Specification & Takeoff Card Directly in Painted Drywall Area
@@ -1076,11 +1117,10 @@
                 // Grid Sheets & Dimensions row
                 ctx.font = '10px JetBrains Mono, monospace';
                 ctx.fillStyle = '#94a3b8';
-                ctx.fillText(`WALL: ${wallWidthInches}″ W × ${wallTotalHeightInches}″ H (Tiled ${tiledHeightInches}″)  |  GRID: ${sheetManifest.length} Sheets (${neededSheetCols}×${neededSheetRows})`, cardX + 12, cardY + 28);
+                ctx.fillText(`WALL: ${s.wallWidthInches}″ W × ${s.wallTotalHeightInches}″ H (Tiled ${s.tiledHeightInches}″)  |  GRID: ${inventory.totalSheets} Sheets (${inventory.gridCols}×${inventory.gridRows})`, cardX + 12, cardY + 28);
 
-                // Color Swatches & Sheet Counts
                 // Color 1 swatch
-                ctx.fillStyle = c1;
+                ctx.fillStyle = s.colorTile1;
                 ctx.beginPath();
                 ctx.arc(cardX + 18, cardY + 54, 6, 0, Math.PI * 2);
                 ctx.fill();
@@ -1090,10 +1130,10 @@
 
                 ctx.fillStyle = '#f59e0b';
                 ctx.font = 'bold 10px JetBrains Mono, monospace';
-                ctx.fillText(`Color 1: ${totalC1MajoritySheets} Base Sheets`, cardX + 30, cardY + 49);
+                ctx.fillText(`Color 1: ${inventory.c1Sheets} Base Sheets`, cardX + 30, cardY + 49);
 
                 // Color 2 swatch
-                ctx.fillStyle = c2;
+                ctx.fillStyle = s.colorTile2;
                 ctx.beginPath();
                 ctx.arc(cardX + 210, cardY + 54, 6, 0, Math.PI * 2);
                 ctx.fill();
@@ -1102,44 +1142,55 @@
                 ctx.stroke();
 
                 ctx.fillStyle = '#38bdf8';
-                ctx.fillText(`Color 2: ${totalC2MajoritySheets} Base Sheets`, cardX + 222, cardY + 49);
+                ctx.fillText(`Color 2: ${inventory.c2Sheets} Base Sheets`, cardX + 222, cardY + 49);
 
                 // Hand-swap details & box order recommendation
                 ctx.fillStyle = '#cbd5e1';
                 ctx.font = '10px JetBrains Mono, monospace';
-                const totalCartonsNeeded = Math.ceil((sheetManifest.length * 1.10) / 10);
-                ctx.fillText(`Hand-Swaps: ${totalHandSwaps} tiles (${swappedC1Count} C1 into C2, ${swappedC2Count} C2 into C1)  |  Order: ${totalCartonsNeeded} Boxes`, cardX + 12, cardY + 74);
+                ctx.fillText(`Hand-Swaps: ${inventory.handSwaps} tiles (${inventory.swappedC1} C1 into C2, ${inventory.swappedC2} C2 into C1)  |  Order: ${inventory.boxes} Boxes`, cardX + 12, cardY + 74);
 
                 ctx.restore();
             }
+        }
 
-            // Update Takeoff Dashboard Bar
-            const totalSheets = sheetManifest.length;
-            statTotalSheets.textContent = totalSheets;
-            statC1Sheets.textContent = `${totalC1MajoritySheets} sheets`;
-            statC2Sheets.textContent = `${totalC2MajoritySheets} sheets`;
-            statHandSwaps.textContent = `${totalHandSwaps} tiles`;
-            if (statSwappedC1) statSwappedC1.textContent = swappedC1Count;
-            if (statSwappedC2) statSwappedC2.textContent = swappedC2Count;
-
-            // Boxes to order with 10% standard waste
-            const wasteFactor = 1.10;
-            const boxesNeeded = Math.ceil((totalSheets * wasteFactor) / 10);
-            statCartons.textContent = `${boxesNeeded} Boxes (${boxesNeeded * 10} sheets)`;
+        // --- Pipeline stage 6: takeoff dashboard bar ---
+        function renderDashboard(inv) {
+            statTotalSheets.textContent = inv.totalSheets;
+            statC1Sheets.textContent = `${inv.c1Sheets} sheets`;
+            statC2Sheets.textContent = `${inv.c2Sheets} sheets`;
+            statHandSwaps.textContent = `${inv.handSwaps} tiles`;
+            statSwappedC1.textContent = inv.swappedC1;
+            statSwappedC2.textContent = inv.swappedC2;
+            statCartons.textContent = `${inv.boxes} Boxes (${inv.boxes * SHEETS_PER_BOX} sheets)`;
         }
 
         // --- Export Canvas as High-Res PNG ---
+        // Re-renders the current view off-screen at a higher pixel density instead of copying the
+        // on-screen canvas.
         function downloadCanvasPNG() {
-            try {
+            if (!lastGrid) return;
+            const longestSide = Math.max(lastView.cssWidth, lastView.cssHeight);
+            const view = { ...lastView, dpr: Math.min(EXPORT_PIXEL_DENSITY, EXPORT_MAX_PIXELS / longestSide) };
+
+            const exportCanvas = document.createElement('canvas');
+            exportCanvas.width = Math.round(view.cssWidth * view.dpr);
+            exportCanvas.height = Math.round(view.cssHeight * view.dpr);
+            renderCanvas(exportCanvas.getContext('2d'), view, lastGrid, lastInventory, state);
+
+            exportCanvas.toBlob((blob) => {
+                if (!blob) {
+                    console.error('Error generating PNG: canvas could not be encoded');
+                    return;
+                }
+                const url = URL.createObjectURL(blob);
                 const link = document.createElement('a');
                 link.download = `tile-installation-plan-${state.wallWidthInches}x${state.wallTotalHeightInches}-seed${state.seed}.png`;
-                link.href = canvas.toDataURL('image/png');
+                link.href = url;
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
-            } catch (err) {
-                console.error('Error generating PNG:', err);
-            }
+                setTimeout(() => URL.revokeObjectURL(url), 0);
+            }, 'image/png');
         }
 
         // --- Event Listeners & Interactive Handlers ---
@@ -1189,13 +1240,14 @@
 
             // Canvas Manual Tile Flip
             canvas.addEventListener('click', (e) => {
+                if (!lastGrid) return;
                 const rect = canvas.getBoundingClientRect();
-                const clickX = e.clientX - rect.left;
-                const clickY = e.clientY - rect.top;
+                const pt = toWall(lastView, e.clientX - rect.left, e.clientY - rect.top);
 
-                for (let i = renderedTiles.length - 1; i >= 0; i--) {
-                    const tile = renderedTiles[i];
-                    if (isPointInPolygon({ x: clickX, y: clickY }, tile.points)) {
+                const tiles = lastGrid.tiles;
+                for (let i = tiles.length - 1; i >= 0; i--) {
+                    const tile = tiles[i];
+                    if (isPointInPolygon(pt, tile.points)) {
                         setState({
                             manualOverrides: { ...state.manualOverrides, [tile.overrideKey]: 1 - tile.colorIdx }
                         });
@@ -1233,25 +1285,21 @@
 
         // Multi-Wall Takeoff
         function saveCurrentWallToTakeoff() {
+            if (!lastInventory) return;
             const wallName = `Wall ${savedWalls.length + 1} (${state.wallWidthInches}″ × ${state.wallTotalHeightInches}″)`;
-            const sheetsTotal = parseInt(statTotalSheets.textContent) || 0;
-            const c1Sheets = parseInt(statC1Sheets.textContent) || 0;
-            const c2Sheets = parseInt(statC2Sheets.textContent) || 0;
-            const handSwaps = parseInt(statHandSwaps.textContent) || 0;
-            const swapsC1 = parseInt(statSwappedC1.textContent) || 0;
-            const swapsC2 = parseInt(statSwappedC2.textContent) || 0;
+            const inv = lastInventory;
 
             savedWalls.push({
                 name: wallName,
                 width: state.wallWidthInches,
                 height: state.wallTotalHeightInches,
                 tiledH: state.tiledHeightInches,
-                sheetsTotal,
-                c1Sheets,
-                c2Sheets,
-                handSwaps,
-                swapsC1,
-                swapsC2
+                sheetsTotal: inv.totalSheets,
+                c1Sheets: inv.c1Sheets,
+                c2Sheets: inv.c2Sheets,
+                handSwaps: inv.handSwaps,
+                swapsC1: inv.swappedC1,
+                swapsC2: inv.swappedC2
             });
 
             renderSavedWallsList();
@@ -1451,8 +1499,27 @@
             }
         }
 
+        // --- Debugging handle ---
+        window.planner = {
+            get state() { return state; },
+            get lastGrid() { return lastGrid; },
+            get lastInventory() { return lastInventory; },
+            get lastView() { return lastView; },
+            setState
+        };
+
         // --- Initialization ---
         window.addEventListener('resize', scheduleRender);
+
+        // Re-render when the window moves to a screen with a different pixel density
+        function watchPixelRatio() {
+            const query = matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
+            query.addEventListener('change', () => {
+                scheduleRender();
+                watchPixelRatio();
+            }, { once: true });
+        }
+        watchPixelRatio();
         window.addEventListener('DOMContentLoaded', () => {
             bindInputs();
             syncControls();
