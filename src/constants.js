@@ -62,4 +62,6 @@ export const WASTE_FACTOR = 1.10;
 // configs load with their settings but render a different pattern.
 // v6: shared colors plus a list of saved walls; tiledSubZones.color2Percent became
 // bottomPercent, and each wall has invertColors.
-export const CONFIG_VERSION = 6;
+// v7: manualOverrides nested { sheet badge 0…: { tile 0–35: color index } }; older keys are
+// converted on import.
+export const CONFIG_VERSION = 7;

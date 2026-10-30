@@ -62,7 +62,8 @@ export function drawHud() {
     hudCtx.restore();
 
     // Badge next to the cursor, flipped to the other side near the canvas edges
-    const label = `X: ${formatInches(pt.x)}, Y: ${formatInches(pt.y)}`;
+    const tile = tileAt(pt);
+    const label = `X: ${formatInches(pt.x)}, Y: ${formatInches(pt.y)}` + (tile ? `  Sheet ${tile.sheetId}, tile ${tile.tileNumber}` : '');
     hudCtx.font = '600 11px JetBrains Mono, monospace';
     const w = Math.ceil(hudCtx.measureText(label).width) + 14;
     const h = 22;
@@ -130,20 +131,22 @@ export function canvasCenter() {
     return { x: canvas.clientWidth / 2, y: canvas.clientHeight / 2 };
 }
 
-function flipTileAt(screenPt) {
-    if (!lastGrid) return;
-    const pt = toWall(lastView, screenPt.x, screenPt.y);
+// The tile under a wall point (topmost drawn first), or null
+function tileAt(pt) {
+    if (!lastGrid) return null;
     const tiles = lastGrid.tiles;
     for (let i = tiles.length - 1; i >= 0; i--) {
-        const tile = tiles[i];
-        if (isPointInPolygon(pt, tile.points)) {
-            if (tile.cut) return; // spares can't be flipped
-            setState({
-                manualOverrides: { ...state.manualOverrides, [tile.overrideKey]: 1 - tile.colorIdx }
-            });
-            return;
-        }
+        if (isPointInPolygon(pt, tiles[i].points)) return tiles[i];
     }
+    return null;
+}
+
+function flipTileAt(screenPt) {
+    const tile = tileAt(toWall(lastView, screenPt.x, screenPt.y));
+    if (!tile || tile.cut) return; // spares can't be flipped
+    setState({
+        manualOverrides: { ...state.manualOverrides, [tile.overrideKey]: 1 - tile.colorIdx }
+    });
 }
 
 // Zoom to `zoom` keeping the wall point under `screenPt` fixed

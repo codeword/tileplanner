@@ -25,7 +25,7 @@ export const DEFAULTS = Object.freeze({
     invertColors: false,
 
     showSheetOverlay: true,
-    // Keyed by overrideKey(); value is the color index (C1 = 0 top, C2 = 1 bottom)
+    // Keyed by overrideKey() (`${sRow}_${sCol}_t${n}`); value is the color shown (C1 = 0, C2 = 1)
     manualOverrides: Object.freeze({}),
     // Cutouts in wall inches: { id, x, y, w, h }, (x, y) = bottom-left corner
     voids: Object.freeze([])
@@ -43,7 +43,7 @@ const LIMITS = {
 
 export const COLOR_KEYS = ['colorTile1', 'colorTile2', 'colorPaint', 'colorGrout'];
 const HEX_COLOR_RE = /^#[0-9a-f]{6}$/i;
-const OVERRIDE_KEY_RE = /^-?\d+_f-?\d+_(top|left|right)$/;
+const OVERRIDE_KEY_RE = /^\d+_\d+_t([0-9]|[12]\d|3[0-5])$/;
 
 export const VOID_SNAP_INCHES = 1 / 16;
 

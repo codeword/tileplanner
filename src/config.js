@@ -1,6 +1,6 @@
 // Config JSON: saved walls to config, and config (any version) to colors + walls with warnings.
 import { C1, C2, CONFIG_VERSION } from './constants.js';
-import { clipVoidsToWall, floorRowIndex, overrideKey } from './geometry.js';
+import { buildSheetGrid, clipVoidsToWall, floorRowIndex, markCutTiles } from './geometry.js';
 import { COLOR_KEYS, DEFAULTS, normalizeState, sanitizeOverrides, sanitizeVoids, wallSettings } from './state.js';
 
 // --- Config JSON ---
@@ -12,6 +12,25 @@ const MAX_WALL_NAME_LENGTH = 60;
 export function sanitizeWallName(name, fallback) {
     const trimmed = (typeof name === 'string') ? name.trim().slice(0, MAX_WALL_NAME_LENGTH) : '';
     return trimmed || fallback;
+}
+
+// The wall's sheets with their badge numbers (culled sheets removed, the rest renumbered)
+function sheetGrid(w) {
+    const grid = buildSheetGrid(w);
+    markCutTiles(grid, w);
+    return grid;
+}
+
+// State keys (sheet grid position) → { [sheet badge]: { [tile 0–35]: color index } }.
+// Flips on sheets that have no badge (outside the wall or fully in a void) are left out.
+function overridesBySheet(w) {
+    const out = {};
+    for (const tile of sheetGrid(w).tiles) {
+        const idx = w.manualOverrides[tile.overrideKey];
+        if (idx === undefined) continue;
+        (out[tile.sheetId] ||= {})[tile.tileNumber] = idx;
+    }
+    return out;
 }
 
 function wallConfigFromSettings(name, w) {
@@ -33,8 +52,8 @@ function wallConfigFromSettings(name, w) {
             outlierScatterPercent: w.outlierPct,
             seed: w.seed
         },
-        // Keys are `${col}_f${tierAboveFloor}_${type}`, values the color shown: 0 (C1) or 1 (C2)
-        manualOverrides: { ...w.manualOverrides },
+        // { sheet badge (from 0): { tile 0–35: color index shown, 0 = Color 1, 1 = Color 2 } }
+        manualOverrides: overridesBySheet(w),
         // Inches from the floor at the left wall edge; (x, y) is the bottom-left corner
         voids: w.voids.map(v => ({ x: v.x, y: v.y, width: v.w, height: v.h }))
     };
@@ -96,7 +115,11 @@ function wallToPatch(wall, version) {
     return patch;
 }
 
-// v1 configs stored hex strings keyed by `${col}_${rowFromTop}_${type}`.
+// v2–v6 keys: `${col}_f${tierAboveFloor}_${type}`
+const LEGACY_KEY_RE = /^-?\d+_f-?\d+_(top|left|right)$/;
+const legacyKey = (col, floorRow, type) => `${col}_f${floorRow}_${type}`;
+
+// v1 configs stored hex strings keyed by `${col}_${rowFromTop}_${type}`; returns v2–v6 keys.
 function convertLegacyOverrides(raw, s) {
     const out = {};
     if (!raw || typeof raw !== 'object') return out;
@@ -106,7 +129,7 @@ function convertLegacyOverrides(raw, s) {
         const c = hex.toLowerCase();
         const idx = (c === s.colorTile1) ? C1 : (c === s.colorTile2) ? C2 : -1;
         if (idx < 0) continue;
-        out[overrideKey(Number(m[1]), floorRowIndex(Number(m[2]), s.tiledHeightInches), m[3])] = idx;
+        out[legacyKey(Number(m[1]), floorRowIndex(Number(m[2]), s.tiledHeightInches), m[3])] = idx;
     }
     return out;
 }
@@ -139,18 +162,43 @@ function wallFromConfig(wall, version, base) {
     if (next.voids.length < imported.length) warnings.push(`${imported.length - next.voids.length} void(s) outside the wall dropped`);
     if (trimmed) warnings.push(`${trimmed} void(s) trimmed to the wall`);
 
-    const rawOverrides = wall.manualOverrides || {};
-    if (version === 1) {
-        next.manualOverrides = convertLegacyOverrides(rawOverrides, next);
+    // Overrides are resolved against this wall's sheets: v7 by badge and tile number, older
+    // versions by column, tier above the floor and tile type
+    const isObject = (v) => v && typeof v === 'object' && !Array.isArray(v);
+    const rawOverrides = isObject(wall.manualOverrides) ? wall.manualOverrides : {};
+    const tiles = sheetGrid(next).tiles;
+    next.manualOverrides = {};
+    let given;
+    if (version >= 7) {
+        const bySheetTile = new Map(tiles.map(t => [`${t.sheetId}/${t.tileNumber}`, t]));
+        given = 0;
+        for (const [sheet, byTile] of Object.entries(rawOverrides)) {
+            if (!isObject(byTile)) { given++; continue; }
+            for (const [n, idx] of Object.entries(byTile)) {
+                given++;
+                const tile = /^\d+$/.test(sheet) && /^\d+$/.test(n) && bySheetTile.get(`${Number(sheet)}/${Number(n)}`);
+                if (tile && (idx === 0 || idx === 1)) next.manualOverrides[tile.overrideKey] = idx;
+            }
+        }
     } else {
-        next.manualOverrides = sanitizeOverrides(rawOverrides);
-        // v2 indices had 0 = bottom color; flip them to C1 = top
-        if (version === 2) {
-            for (const key of Object.keys(next.manualOverrides)) next.manualOverrides[key] = 1 - next.manualOverrides[key];
+        given = Object.keys(rawOverrides).length;
+        let legacy = {};
+        if (version === 1) {
+            legacy = convertLegacyOverrides(rawOverrides, next);
+        } else {
+            for (const [key, idx] of Object.entries(rawOverrides)) {
+                // v2 indices had 0 = bottom color; flip them to C1 = top
+                if (LEGACY_KEY_RE.test(key) && (idx === 0 || idx === 1)) legacy[key] = (version === 2) ? 1 - idx : idx;
+            }
+        }
+        for (const tile of tiles) {
+            const idx = legacy[legacyKey(tile.col, tile.floorRow, tile.type)];
+            if (idx !== undefined) next.manualOverrides[tile.overrideKey] = idx;
         }
     }
-    const dropped = Object.keys(rawOverrides).length - Object.keys(next.manualOverrides).length;
-    if (dropped > 0) warnings.push(`${dropped} manual override(s) dropped`);
+    next.manualOverrides = sanitizeOverrides(next.manualOverrides);
+    const dropped = given - Object.keys(next.manualOverrides).length;
+    if (dropped > 0) warnings.push(`${dropped} manual override(s) dropped (no matching tile or bad color index)`);
     return { settings: wallSettings(next), warnings };
 }
 

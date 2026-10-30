@@ -2,15 +2,25 @@
 import { CUBE_DX_INCHES, CUBE_DY_INCHES, CUBE_STEP_X_INCHES, LEFT_OFFSET_INCHES, SHEET_DRAWN_HEIGHT_INCHES, SHEET_WIDTH_INCHES, TIER_STEP_INCHES } from './constants.js';
 
 // Tile rows are numbered from the top tile line down, so a row index shifts whenever the
-// tiled height changes. Overrides and the pattern hashes use the tier counted up from the
-// floor instead (negative below the floor line). Row stagger comes from the sheet.
+// tiled height changes. The pattern hashes use the tier counted up from the floor instead
+// (negative below the floor line). Row stagger comes from the sheet.
 export function floorRowIndex(globalRow, tiledHeightInches) {
     const cubeCenterAboveFloor = tiledHeightInches - (globalRow * TIER_STEP_INCHES + CUBE_DY_INCHES);
     return Math.round(cubeCenterAboveFloor / TIER_STEP_INCHES);
 }
 
-export function overrideKey(col, floorRow, type) {
-    return `${col}_f${floorRow}_${type}`;
+// Tiles are numbered 0–35 within a sheet, row by row from the top. In each row the three
+// tops come first (left to right), then left, right of cube 1, cube 2, cube 3.
+export function tileNumber(localRow, localCol, type) {
+    const inRow = (type === 'top') ? localCol : 3 + localCol * 2 + (type === 'right' ? 1 : 0);
+    return localRow * 9 + inRow;
+}
+
+// Overrides in state are keyed by the sheet's grid position (row from the tile line, column
+// from the left) and the tile number, so they survive sheet renumbering. The config uses
+// the badge number instead (see config.js).
+export function overrideKey(sRow, sCol, n) {
+    return `${sRow}_${sCol}_t${n}`;
 }
 
 // Intersection of a rectangle with the wall (0..W × 0..H), or null if nothing is left
@@ -96,7 +106,7 @@ export function buildSheetGrid(s) {
             const sheetIntersectsWall = (right > 0) && (left < wallWidth) && (top > 0);
             if (!sheetIntersectsWall) continue;
 
-            const sheetId = sheets.length + 1;
+            const sheetId = sheets.length; // badge numbers start at 0
             const sheetTiles = [];
 
             for (let localR = 0; localR < 4; localR++) {
@@ -112,6 +122,7 @@ export function buildSheetGrid(s) {
                     const cx = left + (localC * CUBE_STEP_X_INCHES) + rowOffset + CUBE_DX_INCHES;
 
                     for (const rhomb of cubeRhombi(cx, cy)) {
+                        const n = tileNumber(localR, localC, rhomb.type);
                         const tile = {
                             ...rhomb,
                             sheetId,
@@ -119,7 +130,8 @@ export function buildSheetGrid(s) {
                             row,
                             floorRow,
                             localCol: localC,
-                            overrideKey: overrideKey(col, floorRow, rhomb.type)
+                            tileNumber: n,
+                            overrideKey: overrideKey(sRow, sCol, n)
                         };
                         tiles.push(tile);
                         sheetTiles.push(tile);
@@ -209,7 +221,7 @@ export function markCutTiles(grid, s) {
 
     grid.sheets = grid.sheets.filter(sheet => sheet.tiles.some(t => !t.cut));
     grid.sheets.forEach((sheet, i) => {
-        sheet.id = i + 1;
+        sheet.id = i;
         for (const t of sheet.tiles) t.sheetId = sheet.id;
     });
     grid.tiles = grid.sheets.flatMap(sheet => sheet.tiles);
