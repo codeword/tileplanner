@@ -35,10 +35,41 @@ Single-file web app (`tile-planner.html`) for planning a tile wall built from Me
 
 Constraint: for the same seed and settings, the refactored version should render the identical pattern, so before/after can be compared.
 
+## Planned features: voids, cut tiles, navigation (agreed spec)
+Came from a feature audit written with Gemini; rebuilt here on the state model, not ported. All coordinates are inches from the floor at the left wall edge (0″, 0″), x right, y up.
+
+**Void space.** A tile is *cut* if it lies fully inside void space: the union of all void rectangles plus everything outside the wall (past the left/right edges, below the floor). A tile only partly in void space is usable (installed and trimmed). Overlapping voids are allowed; test against the union (check vertices and edge midpoints so L-shapes made from two rectangles work).
+
+**Voids (cutouts).**
+- Mouse: movement < 3px between down and up = click (flips a tile). ≥ 3px = drag that creates a void. Shift+drag = pan (see Navigation). While dragging, show a cyan dashed preview with a faint fill.
+- Snap to 1/16″. New voids are clamped to the wall (floor to ceiling, so a void can cross the tile line into the paint; only the part below the tile line affects tiles).
+- Look: dashed outline plus a centered JetBrains Mono label `W″ × H″ @ (X″, Y″)`, where (X, Y) is the void's bottom-left corner. No fill. A red × badge in the top-right corner deletes it.
+- Sidebar list of voids with editable W, H, X and Y fields.
+- Stored in state as an array of `{x, y, w, h}` in inches, included in config JSON (bump `version`) and saved walls. Voids survive re-seeds, color changes and height changes.
+- When the wall shrinks, stored voids are clipped to the new wall permanently, but only when the edit is committed (blur, Enter, slider release, JSON import). Live typing only previews the clip. A void clipped to zero area is deleted.
+
+**Cut-tile rendering.** Cut tiles are drawn with a dotted outline and no fill, whether they're in a void or outside the wall (this replaces the audit's 80% grey mask). Outside the wall gets a light grey wash so the wall edge stays readable. Usable tiles render normally. Cut tiles can't be click-flipped.
+
+**Sheets and takeoff.**
+- A sheet whose 36 tiles are all cut is omitted: not drawn, outlined, numbered or counted.
+- Any other sheet keeps its full outline and its badge centered on the whole sheet, and is counted.
+- Majority color and hand-swaps use usable tiles only (tie → C1).
+- Cut tiles on a kept sheet are spares of that sheet's majority color.
+- Swap supply per color: C1 need = swappedC1 (C1 tiles placed into C2 sheets). C1 supply = swappedC2 (C1 tiles pulled out of C1 sheets) + spare C1 tiles. Extra C1 sheets = ceil(max(0, need − supply) / 36). Mirror for C2. Add to the majority-sheet count before the 10% waste.
+- Boxes per color: ceil(colorSheets × 1.10 / 10). Dashboard and card show sheets, spares, swaps, extra sheets and boxes per color.
+
+**Navigation.** Mouse wheel / pinch zooms around the cursor, Shift+drag pans, plus a Fit button. View zoom/pan is not part of the config JSON.
+
+**Cursor HUD.** While hovering (not dragging), show a badge `X: …″, Y: …″` near the cursor, kept on screen at the edges, with dashed guide lines to the floor line and the left wall.
+
+**Spec card.** Same content as today plus hex codes next to the C1/C2 swatches and the new per-color takeoff numbers. Drawn above everything except the HUD. If the painted area is too short for it, the canvas grows a strip below the floor line and the card goes there.
+
+**PNG export.** A clean plan at a fixed high resolution: tiles, voids with labels, wall lines and the card. Sheet outlines and badges are included only if the Sheet Overlay is on. No × badges, HUD or drag preview.
+
+**Still open (defaults chosen, confirm when building):** label units (decimal vs fractions like 36 ⅛″, ties into the ft-in backlog item); the exact export resolution; whether drag-to-paint ever comes back (it would need a modifier key, since plain drag now makes voids).
+
 ## Takeoff accuracy improvements
-- Box counts per color, not one total.
-- Swap supply: extra C1 sheets = ceil(max(0, swappedC1 − swappedC2) / 36). Mirror for C2. Add to majority sheets before waste.
-- Count only tiles whose center is inside the wall (exclude cut-off tiles past the edges and below the floor).
+- Superseded by the spec above: per-color boxes, swap supply, and the cut-tile rule (tiles past the edges or below the floor are spares, not installed).
 - Make sheet alignment/left offset adjustable (currently hard-coded at 1.875″).
 - Grout joint isn't modeled. Verify Merola's published sheet dimensions.
 
@@ -49,12 +80,16 @@ Constraint: for the same seed and settings, the refactored version should render
 - Snapshot tests of the pure stages using fixed seeds.
 
 ## UX backlog
-- High value: printable per-sheet swap map; undo/redo and drag-to-paint; confirm before Re-Seed wipes manual edits; editable seed field with history; autosave to localStorage and URL-hash sharing; saved walls that persist and can be reopened.
-- Polish: zoom/pan; hover-highlight sheet; zone bar in actual tile colors; indicate when transition % is clamped; clean preview mode; responsive layout; ft-in and metric display; named walls; label/`for` accessibility and C1/C2 letters on sheet badges.
+- High value: printable per-sheet swap map; undo/redo (including void edits); confirm before Re-Seed wipes manual edits; editable seed field with history; autosave to localStorage and URL-hash sharing; saved walls that persist and can be reopened.
+- Deferred: drag-to-paint (not needed yet).
+- Polish: hover-highlight sheet; zone bar in actual tile colors; indicate when transition % is clamped; clean preview mode; responsive layout; ft-in and metric display; named walls; label/`for` accessibility and C1/C2 letters on sheet badges.
 
 ## Suggested order
 1. ~~State object, color indices, clamping, stable override keys~~ (done)
-2. Pipeline split and inches-based geometry.
-3. Takeoff math (per-color boxes, swap supply).
-4. Autosave/URL sharing, undo, debug overlay.
-5. Fade registry, module split, per-sheet swap map.
+2. Pipeline split, inches-based geometry with one canvas transform, DPR fix, `window.planner`. Output must stay pixel-identical (verify against the snapshot baseline).
+3. Interaction foundation: pointer handling (3px click/drag split, Shift+drag pan, wheel zoom, Fit), screen↔inch mapping, cursor HUD. The default view must still match the baseline.
+4. Voids, cut-tile rendering, sheet culling, new takeoff math, spec card update, clean high-res PNG. Output changes on purpose here, so take a new snapshot baseline once it's verified.
+5. Autosave/URL sharing, undo (covers voids), debug overlay, confirm before Re-Seed.
+6. Fade registry, module split, per-sheet swap map.
+
+Why features wait until after steps 2–3: they change output on purpose, which ends the pixel-identical check the refactors rely on. They also depend on the inches transform and the pipeline stages.
