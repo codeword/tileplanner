@@ -138,7 +138,7 @@
                         <div class="flex items-center gap-2.5">
                             <input type="color" id="colorTile1">
                             <div>
-                                <div class="text-xs font-medium text-slate-200">Color 1 (Top)</div>
+                                <div class="text-xs font-medium text-slate-200">Color 1 (<span id="posTile1"></span>)</div>
                                 <div id="hexTile1" class="text-[10px] font-mono text-slate-500 uppercase"></div>
                             </div>
                         </div>
@@ -150,12 +150,21 @@
                         <div class="flex items-center gap-2.5">
                             <input type="color" id="colorTile2">
                             <div>
-                                <div class="text-xs font-medium text-slate-200">Color 2 (Bottom)</div>
+                                <div class="text-xs font-medium text-slate-200">Color 2 (<span id="posTile2"></span>)</div>
                                 <div id="hexTile2" class="text-[10px] font-mono text-slate-500 uppercase"></div>
                             </div>
                         </div>
                         <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-cyan-950/80 text-cyan-400 border border-cyan-800/50">C2 (Blue)</span>
                     </div>
+
+                    <!-- Invert: Color 2 on top (per wall) -->
+                    <label for="invertColorsCheck" class="flex items-center justify-between bg-slate-950 p-2 rounded-lg border border-slate-800 cursor-pointer select-none">
+                        <span class="flex items-center gap-2.5">
+                            <input type="checkbox" id="invertColorsCheck" class="rounded border-slate-700 text-cyan-500 focus:ring-0 cursor-pointer">
+                            <span class="text-xs font-medium text-slate-200">Invert: Color 2 on top</span>
+                        </span>
+                        <span class="text-[10px] text-slate-500">this wall</span>
+                    </label>
 
                     <!-- Wall Paint -->
                     <div class="flex items-center justify-between bg-slate-950 p-2 rounded-lg border border-slate-800">
@@ -192,9 +201,9 @@
 
                 <!-- Live Sub-Zone Bar (left to right = top of the tiled area to the floor) -->
                 <div class="h-3 w-full bg-slate-950 rounded-full flex overflow-hidden border border-slate-800">
-                    <div id="barC1" class="bg-indigo-600 transition-all duration-150" title="Color 1 Base (top)"></div>
+                    <div id="barC1" class="bg-indigo-600 transition-all duration-150" title="Top band"></div>
                     <div id="barTrans" class="bg-amber-500 transition-all duration-150" title="Transition Fade"></div>
-                    <div id="barC2" class="bg-slate-300 transition-all duration-150" title="Color 2 Base (bottom)"></div>
+                    <div id="barC2" class="bg-slate-300 transition-all duration-150" title="Bottom band"></div>
                 </div>
 
                 <div class="space-y-3 pt-2">
@@ -203,12 +212,12 @@
                         <div class="flex justify-between text-xs mb-1">
                             <span class="text-slate-300 flex items-center gap-1.5">
                                 <span class="w-2 h-2 rounded-full bg-indigo-500 inline-block"></span>
-                                Solid Color 1 (Top)
+                                <span id="zoneTopLabel"></span>
                             </span>
                             <span id="c1PctVal" class="font-mono text-indigo-400 font-semibold"></span>
                         </div>
                         <div class="text-[11px] text-slate-500 font-mono">
-                            Automatically derived: 100% − Color 2% − Trans%
+                            Automatically derived: 100% − bottom % − transition %
                         </div>
                     </div>
 
@@ -217,7 +226,7 @@
                         <div class="flex justify-between text-xs mb-1">
                             <span class="text-slate-300 flex items-center gap-1.5">
                                 <span class="w-2 h-2 rounded-full bg-slate-300 inline-block"></span>
-                                Solid Color 2 (Bottom)
+                                <span id="zoneBottomLabel"></span>
                             </span>
                             <span id="c2PctVal" class="font-mono text-slate-300 font-semibold"></span>
                         </div>
@@ -440,7 +449,7 @@
         // Spec card (CSS px). It sits in the painted area when that fits at the fitted scale,
         // otherwise in a strip added below the bottom margin.
         const CARD_WIDTH_PX = 480;
-        const CARD_HEIGHT_PX = 118;
+        const CARD_HEIGHT_PX = 134;
         const CARD_MARGIN_PX = 16;
 
         // Navigation (view only, not saved in config)
@@ -458,7 +467,9 @@
         // v3: color1/C1 is the top color (v1/v2 had color1 at the bottom). v4: adds voids.
         // v5: same fields; the pattern math changed (integer hash, floor-based rows), so older
         // configs load with their settings but render a different pattern.
-        const CONFIG_VERSION = 5;
+        // v6: shared colors plus a list of saved walls; tiledSubZones.color2Percent became
+        // bottomPercent, and each wall has invertColors.
+        const CONFIG_VERSION = 6;
 
         // ---- src/noise.js ----
         // Seeded integer hashes and 2D value noise. All randomness in the pattern comes from here.
@@ -629,6 +640,10 @@
                         tile.baseColorIdx = (tile.y < boundaryAboveFloor) ? C1 : C2;
                     }
                 }
+
+                // Invert repaints the same pattern with the colors swapped. Overrides are stored as
+                // the color shown, so they are applied after it.
+                if (s.invertColors) tile.baseColorIdx = 1 - tile.baseColorIdx;
 
                 // Apply manual override if set
                 const override = s.manualOverrides[tile.overrideKey];
@@ -1015,7 +1030,8 @@
         // Tiles and sheet outlines are drawn in wall inches through one transform; text, badges and
         // wall lines are drawn in CSS px. Both include view.dpr, so the same code renders the
         // on-screen canvas and the high-res export.
-        function renderCanvas(ctx, view, grid, inventory, s) {
+        // wallName: shown on the spec card when not empty
+        function renderCanvas(ctx, view, grid, inventory, s, wallName = '') {
             const { scale, dpr } = view;
             const useScreenSpace = () => ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
             const useWallSpace = () => ctx.setTransform(dpr * scale, 0, 0, -dpr * scale, dpr * view.originX, dpr * view.originY);
@@ -1220,7 +1236,7 @@
             ctx.restore();
 
             // 6. Specification & takeoff card (painted area, or the strip below the floor)
-            drawSpecCard(ctx, view.card, inventory, s);
+            drawSpecCard(ctx, view.card, inventory, s, wallName);
 
             ctx.restore(); // content clip
 
@@ -1260,7 +1276,7 @@
 
         // Laid out at CARD_WIDTH_PX × CARD_HEIGHT_PX and scaled down uniformly when the space
         // (card.width) is narrower, so the text never runs past the card
-        function drawSpecCard(ctx, card, inv, s) {
+        function drawSpecCard(ctx, card, inv, s, wallName) {
             const k = Math.min(1, card.width / CARD_WIDTH_PX);
             if (k <= 0) return;
             const x = 0, y = 0, width = CARD_WIDTH_PX, height = CARD_HEIGHT_PX;
@@ -1283,9 +1299,16 @@
             ctx.font = 'bold 11px Inter, sans-serif';
             ctx.fillText('INSTALLATION SPECIFICATIONS & MATERIAL TAKEOFF', left, y + 10);
 
+            // Wall name: the saved wall this one matches, shortened with … to fit
+            ctx.font = 'bold 11px JetBrains Mono, monospace';
+            ctx.fillStyle = wallName ? '#22d3ee' : '#64748b';
+            let name = wallName || 'Unsaved wall';
+            while (name.length > 1 && ctx.measureText(name).width > width - 24) name = name.slice(0, -2) + '…';
+            ctx.fillText(name, left, y + 26);
+
             ctx.font = '10px JetBrains Mono, monospace';
             ctx.fillStyle = '#94a3b8';
-            ctx.fillText(`WALL: ${s.wallWidthInches}″ W × ${s.wallTotalHeightInches}″ H (Tiled ${s.tiledHeightInches}″)  |  GRID: ${inv.totalSheets} Sheets (${inv.gridCols}×${inv.gridRows})`, left, y + 28);
+            ctx.fillText(`WALL: ${s.wallWidthInches}″ W × ${s.wallTotalHeightInches}″ H (Tiled ${s.tiledHeightInches}″)  |  GRID: ${inv.totalSheets} Sheets (${inv.gridCols}×${inv.gridRows})`, left, y + 44);
 
             // One row per color: swatch, hex, sheets, extra sheets, boxes
             const colorRow = (rowY, hex, name, accent, sheets, extra, boxes) => {
@@ -1303,12 +1326,12 @@
                 ctx.font = '10px JetBrains Mono, monospace';
                 ctx.fillText(`${sheets} sheets + ${extra} extra → ${boxes} ${boxes === 1 ? 'box' : 'boxes'}`, left + 140, rowY);
             };
-            colorRow(y + 46, s.colorTile1, 'Color 1', '#f59e0b', inv.c1Sheets, inv.extraC1, inv.boxesC1);
-            colorRow(y + 62, s.colorTile2, 'Color 2', '#38bdf8', inv.c2Sheets, inv.extraC2, inv.boxesC2);
+            colorRow(y + 62, s.colorTile1, 'Color 1', '#f59e0b', inv.c1Sheets, inv.extraC1, inv.boxesC1);
+            colorRow(y + 78, s.colorTile2, 'Color 2', '#38bdf8', inv.c2Sheets, inv.extraC2, inv.boxesC2);
 
             ctx.fillStyle = '#cbd5e1';
-            ctx.fillText(`Hand-swaps: ${inv.handSwaps} tiles (${inv.swappedC1} C1 into C2 sheets, ${inv.swappedC2} C2 into C1 sheets)`, left, y + 80);
-            ctx.fillText(`Spares from cuts: ${inv.spareC1} C1, ${inv.spareC2} C2  |  Order: ${inv.boxes} boxes (incl. 10% waste)`, left, y + 96);
+            ctx.fillText(`Hand-swaps: ${inv.handSwaps} tiles (${inv.swappedC1} C1 into C2 sheets, ${inv.swappedC2} C2 into C1 sheets)`, left, y + 96);
+            ctx.fillText(`Spares from cuts: ${inv.spareC1} C1, ${inv.spareC2} C2  |  Order: ${inv.boxes} boxes (incl. 10% waste)`, left, y + 112);
 
             ctx.restore();
         }
@@ -1334,6 +1357,9 @@
             colorTile2: '#121316', // bottom
             colorPaint: '#b3faff',
             colorGrout: '#333333',
+
+            // Paints Color 2 in the top band and Color 1 in the bottom one; the pattern is unchanged
+            invertColors: false,
 
             showSheetOverlay: true,
             // Keyed by overrideKey(); value is the color index (C1 = 0 top, C2 = 1 bottom)
@@ -1418,10 +1444,23 @@
                 out[key] = HEX_COLOR_RE.test(s[key]) ? s[key].toLowerCase() : prev[key];
             }
 
+            out.invertColors = Boolean(s.invertColors);
             out.showSheetOverlay = Boolean(s.showSheetOverlay);
             out.manualOverrides = sanitizeOverrides(s.manualOverrides);
             out.voids = sanitizeVoids(s.voids);
             return out;
+        }
+
+        // Settings that belong to one wall. The tile/paint/grout colors and the sheet overlay are
+        // shared by all walls.
+        const WALL_KEYS = Object.freeze([
+            'wallWidthInches', 'wallTotalHeightInches', 'tiledHeightInches',
+            'floorPercent', 'transPercent', 'outlierPct', 'algorithm', 'seed',
+            'invertColors', 'manualOverrides', 'voids'
+        ]);
+
+        function wallSettings(s) {
+            return Object.fromEntries(WALL_KEYS.map(key => [key, s[key]]));
         }
 
         let state = normalizeState(DEFAULTS);
@@ -1683,52 +1722,63 @@
         }
 
         // ---- src/config.js ----
-        // Config JSON: state to config, and config (any version) to state with warnings.
+        // Config JSON: saved walls to config, and config (any version) to colors + walls with warnings.
 
         // --- Config JSON ---
+        // v6: { version, colors, walls: [...] }. Colors are shared; everything else is per wall.
+        // Only saved walls are stored: the wall being edited isn't part of the config.
 
-        function configFromState(s) {
+        const MAX_WALL_NAME_LENGTH = 60;
+
+        function sanitizeWallName(name, fallback) {
+            const trimmed = (typeof name === 'string') ? name.trim().slice(0, MAX_WALL_NAME_LENGTH) : '';
+            return trimmed || fallback;
+        }
+
+        function wallConfigFromSettings(name, w) {
             return {
-                version: CONFIG_VERSION,
+                name,
+                invertColors: w.invertColors,
                 physicalWallInches: {
-                    width: s.wallWidthInches,
-                    totalHeight: s.wallTotalHeightInches,
-                    tiledHeight: s.tiledHeightInches
+                    width: w.wallWidthInches,
+                    totalHeight: w.wallTotalHeightInches,
+                    tiledHeight: w.tiledHeightInches
                 },
-                colors: {
-                    color1: s.colorTile1, // top
-                    color2: s.colorTile2, // bottom
-                    paintedWall: s.colorPaint,
-                    grout: s.colorGrout
-                },
-                // Color 1 (top) gets 100 − color2Percent − transitionPercent
+                // The top band gets 100 − bottomPercent − transitionPercent
                 tiledSubZones: {
-                    color2Percent: s.floorPercent,
-                    transitionPercent: s.transPercent
+                    bottomPercent: w.floorPercent,
+                    transitionPercent: w.transPercent
                 },
                 algorithm: {
-                    type: s.algorithm,
-                    outlierScatterPercent: s.outlierPct,
-                    seed: s.seed
+                    type: w.algorithm,
+                    outlierScatterPercent: w.outlierPct,
+                    seed: w.seed
                 },
-                // Keys are `${col}_f${tierAboveFloor}_${type}`, values 0 (C1, top) or 1 (C2, bottom)
-                manualOverrides: { ...s.manualOverrides },
+                // Keys are `${col}_f${tierAboveFloor}_${type}`, values the color shown: 0 (C1) or 1 (C2)
+                manualOverrides: { ...w.manualOverrides },
                 // Inches from the floor at the left wall edge; (x, y) is the bottom-left corner
-                voids: s.voids.map(v => ({ x: v.x, y: v.y, width: v.w, height: v.h }))
+                voids: w.voids.map(v => ({ x: v.x, y: v.y, width: v.w, height: v.h }))
             };
         }
 
-        // Maps the fields present in a parsed config onto a state patch. Absent fields keep
-        // their current value; validation and clamping happen in normalizeState.
-        // Before v3, color1 and its percent were the bottom color, so they map to Color 2.
-        function configToPatch(parsed, version) {
+        // `s` supplies the shared colors; `walls` = [{ name, settings }] in list order
+        function configFromProject(s, walls) {
+            return {
+                version: CONFIG_VERSION,
+                colors: {
+                    color1: s.colorTile1,
+                    color2: s.colorTile2,
+                    paintedWall: s.colorPaint,
+                    grout: s.colorGrout
+                },
+                walls: walls.map(w => wallConfigFromSettings(w.name, w.settings))
+            };
+        }
+
+        // Before v3, color1 was the bottom color, so it maps to Color 2
+        function colorsToPatch(parsed, version) {
             const bottomFirst = version < 3;
             const patch = {};
-            const wall = parsed.physicalWallInches || {};
-            if (wall.width !== undefined) patch.wallWidthInches = wall.width;
-            if (wall.totalHeight !== undefined) patch.wallTotalHeightInches = wall.totalHeight;
-            if (wall.tiledHeight !== undefined) patch.tiledHeightInches = wall.tiledHeight;
-
             const colors = parsed.colors || {};
             const color1 = colors.color1 || colors.tile1FloorBase;
             const color2 = colors.color2 || colors.tile2WallBase;
@@ -1738,15 +1788,28 @@
             if (bottom) patch.colorTile2 = bottom;
             if (colors.paintedWall) patch.colorPaint = colors.paintedWall;
             if (colors.grout) patch.colorGrout = colors.grout;
+            return patch;
+        }
 
-            const zones = parsed.tiledSubZones || {};
-            const bottomPercent = bottomFirst
-                ? (zones.color1Percent !== undefined ? zones.color1Percent : zones.floorPercent)
-                : zones.color2Percent;
+        // Maps the fields present in one wall's config onto a state patch. Absent fields keep
+        // their default; validation and clamping happen in normalizeState.
+        function wallToPatch(wall, version) {
+            const patch = {};
+            const dims = wall.physicalWallInches || {};
+            if (dims.width !== undefined) patch.wallWidthInches = dims.width;
+            if (dims.totalHeight !== undefined) patch.wallTotalHeightInches = dims.totalHeight;
+            if (dims.tiledHeight !== undefined) patch.tiledHeightInches = dims.tiledHeight;
+            if (wall.invertColors !== undefined) patch.invertColors = wall.invertColors;
+
+            // The bottom band: bottomPercent (v6), color2Percent (v3–v5), color1Percent (v1–v2)
+            const zones = wall.tiledSubZones || {};
+            const bottomPercent = (version >= 6) ? zones.bottomPercent
+                : (version >= 3) ? zones.color2Percent
+                : (zones.color1Percent !== undefined ? zones.color1Percent : zones.floorPercent);
             if (bottomPercent !== undefined) patch.floorPercent = bottomPercent;
             if (zones.transitionPercent !== undefined) patch.transPercent = zones.transitionPercent;
 
-            const algo = parsed.algorithm || {};
+            const algo = wall.algorithm || {};
             if (algo.type !== undefined) patch.algorithm = algo.type;
             if (algo.outlierScatterPercent !== undefined) patch.outlierPct = algo.outlierScatterPercent;
             if (algo.seed !== undefined) patch.seed = algo.seed;
@@ -1769,29 +1832,26 @@
             return out;
         }
 
-        // Turns a parsed config object into the next state, listing every field that was
-        // rejected, clamped, dropped or trimmed.
-        function stateFromConfig(parsed, base) {
+        // Lists the patch fields that normalizeState rejected or clamped
+        function patchWarnings(patch, next) {
             const warnings = [];
-            const declared = (parsed.version === undefined) ? 1 : Number(parsed.version);
-            let version = Math.floor(declared);
-            if (!(declared >= 1 && declared <= CONFIG_VERSION)) {
-                warnings.push(`unknown config version ${JSON.stringify(parsed.version)}, read as v${CONFIG_VERSION}`);
-                version = CONFIG_VERSION;
-            }
-
-            // Report every field that was rejected or clamped
-            const patch = configToPatch(parsed, version);
-            const next = normalizeState({ ...base, ...patch }, base);
             for (const [key, value] of Object.entries(patch)) {
                 const given = (typeof value === 'string') ? value.trim().toLowerCase() : value;
                 if (String(next[key]) !== String(given)) {
                     warnings.push(`${key}: ${JSON.stringify(value)} → ${JSON.stringify(next[key])}`);
                 }
             }
+            return warnings;
+        }
+
+        // One wall's config onto `base` (defaults plus the shared colors)
+        function wallFromConfig(wall, version, base) {
+            const patch = wallToPatch(wall, version);
+            const next = normalizeState({ ...base, ...patch }, base);
+            const warnings = patchWarnings(patch, next);
 
             // Voids (v4+); older configs have none. Trimmed to the imported wall right away.
-            const rawVoids = Array.isArray(parsed.voids) ? parsed.voids : [];
+            const rawVoids = Array.isArray(wall.voids) ? wall.voids : [];
             const imported = sanitizeVoids(rawVoids.map(v => (v && typeof v === 'object') ? { x: v.x, y: v.y, w: v.width, h: v.height } : null));
             if (imported.length < rawVoids.length) warnings.push(`${rawVoids.length - imported.length} malformed void(s) dropped`);
             next.voids = clipVoidsToWall({ ...next, voids: imported });
@@ -1800,7 +1860,7 @@
             if (next.voids.length < imported.length) warnings.push(`${imported.length - next.voids.length} void(s) outside the wall dropped`);
             if (trimmed) warnings.push(`${trimmed} void(s) trimmed to the wall`);
 
-            const rawOverrides = parsed.manualOverrides || {};
+            const rawOverrides = wall.manualOverrides || {};
             if (version === 1) {
                 next.manualOverrides = convertLegacyOverrides(rawOverrides, next);
             } else {
@@ -1812,7 +1872,49 @@
             }
             const dropped = Object.keys(rawOverrides).length - Object.keys(next.manualOverrides).length;
             if (dropped > 0) warnings.push(`${dropped} manual override(s) dropped`);
-            return { next, warnings };
+            return { settings: wallSettings(next), warnings };
+        }
+
+        // Turns a parsed config object into the shared colors and the saved walls, listing every
+        // field that was rejected, clamped, dropped or trimmed. Before v6 a config held one wall,
+        // which becomes the only saved wall.
+        function projectFromConfig(parsed, base) {
+            const warnings = [];
+            const declared = (parsed.version === undefined) ? 1 : Number(parsed.version);
+            let version = Math.floor(declared);
+            if (!(declared >= 1 && declared <= CONFIG_VERSION)) {
+                warnings.push(`unknown config version ${JSON.stringify(parsed.version)}, read as v${CONFIG_VERSION}`);
+                version = CONFIG_VERSION;
+            }
+
+            const colorsPatch = colorsToPatch(parsed, version);
+            const withColors = normalizeState({ ...base, ...colorsPatch }, base);
+            warnings.push(...patchWarnings(colorsPatch, withColors));
+            const colors = Object.fromEntries(COLOR_KEYS.map(key => [key, withColors[key]]));
+            const wallBase = normalizeState({ ...DEFAULTS, ...colors });
+
+            let rawWalls;
+            if (version < 6) {
+                rawWalls = [{ name: 'Imported wall', ...parsed }];
+            } else if (Array.isArray(parsed.walls)) {
+                rawWalls = parsed.walls;
+            } else {
+                rawWalls = [];
+                if (parsed.walls !== undefined) warnings.push('walls must be a list; no walls imported');
+            }
+
+            const walls = [];
+            rawWalls.forEach((raw, i) => {
+                if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+                    warnings.push(`walls[${i}] is not an object, skipped`);
+                    return;
+                }
+                const name = sanitizeWallName(raw.name, `Wall ${i + 1}`);
+                const wall = wallFromConfig(raw, version, wallBase);
+                warnings.push(...wall.warnings.map(w => `${name}: ${w}`));
+                walls.push({ name, settings: wall.settings });
+            });
+            return { colors, walls, warnings };
         }
 
         // ---- src/ui/takeoff.js ----
@@ -1846,31 +1948,51 @@
             statCartons.textContent = `${boxes(inv.boxes)} (${inv.boxesC1} C1 + ${inv.boxesC2} C2)`;
         }
 
-        // Multi-Wall Takeoff
-        const savedWalls = [];
+        // --- Multi-wall takeoff ---
+        // Each saved wall is { name, settings }: its WALL_KEYS values. Colors are shared, so a saved
+        // wall shows in the current colors. Counts are recomputed from the settings (they don't
+        // depend on colors) and cached per settings object.
+        let savedWalls = [];
+        const wallCounts = new WeakMap();
+
+        // The saved wall last saved or loaded. The card shows its name while the wall being
+        // edited still has exactly its settings.
+        let linkedWall = null;
+
+        function currentWallName(s) {
+            if (!linkedWall || !savedWalls.includes(linkedWall)) return '';
+            const same = WALL_KEYS.every(key => JSON.stringify(s[key]) === JSON.stringify(linkedWall.settings[key]));
+            return same ? linkedWall.name : '';
+        }
+
+        function getSavedWalls() {
+            return savedWalls;
+        }
+
+        function setSavedWalls(walls) {
+            savedWalls = walls.slice();
+            renderSavedWallsList();
+            scheduleRender();
+        }
+
+        function countsFor(settings) {
+            if (!wallCounts.has(settings)) {
+                wallCounts.set(settings, computeWall(normalizeState({ ...state, ...settings })).inventory);
+            }
+            return wallCounts.get(settings);
+        }
 
         function saveCurrentWallToTakeoff() {
-            if (!lastInventory) return;
-            const wallName = `Wall ${savedWalls.length + 1} (${state.wallWidthInches}″ × ${state.wallTotalHeightInches}″)`;
-            const inv = lastInventory;
-
-            // The config reproduces the wall exactly; the counts are kept for the totals
-            savedWalls.push({
-                name: wallName,
-                config: configFromState(state),
-                sheetsTotal: inv.totalSheets,
-                c1Sheets: inv.c1Sheets,
-                c2Sheets: inv.c2Sheets,
-                handSwaps: inv.handSwaps,
-                swapsC1: inv.swappedC1,
-                swapsC2: inv.swappedC2,
-                extraC1: inv.extraC1,
-                extraC2: inv.extraC2,
-                voidCount: state.voids.length
-            });
-
+            const name = `Wall ${savedWalls.length + 1} (${state.wallWidthInches}″ × ${state.wallTotalHeightInches}″)`;
+            const settings = wallSettings(state);
+            if (lastInventory && lastState === state) wallCounts.set(settings, lastInventory);
+            linkedWall = { name, settings };
+            savedWalls.push(linkedWall);
             renderSavedWallsList();
+            scheduleRender();
         }
+
+        const escapeHtml = (text) => text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
         function renderSavedWallsList() {
             const list = document.getElementById('savedWallsList');
@@ -1890,25 +2012,30 @@
             let aggExtraC2 = 0;
 
             savedWalls.forEach((w, idx) => {
-                aggExtraC1 += w.extraC1;
-                aggExtraC2 += w.extraC2;
-                aggSheets += w.sheetsTotal;
-                aggC1 += w.c1Sheets;
-                aggC2 += w.c2Sheets;
-                aggSwaps += w.handSwaps;
-                aggSwapsC1 += (w.swapsC1 || 0);
-                aggSwapsC2 += (w.swapsC2 || 0);
+                const inv = countsFor(w.settings);
+                const voidCount = w.settings.voids.length;
+                aggExtraC1 += inv.extraC1;
+                aggExtraC2 += inv.extraC2;
+                aggSheets += inv.totalSheets;
+                aggC1 += inv.c1Sheets;
+                aggC2 += inv.c2Sheets;
+                aggSwaps += inv.handSwaps;
+                aggSwapsC1 += inv.swappedC1;
+                aggSwapsC2 += inv.swappedC2;
 
                 html += `
-                    <div class="flex items-center justify-between bg-slate-950 p-2 rounded border border-slate-800 text-[11px]">
-                        <div>
-                            <span class="font-medium text-slate-200">${w.name}</span>
-                            <span class="text-slate-500 block font-mono">C1: ${w.c1Sheets}+${w.extraC1} | C2: ${w.c2Sheets}+${w.extraC2} (${w.sheetsTotal} sheets${w.voidCount ? `, ${w.voidCount} voids` : ''})</span>
-                            <span class="text-amber-400 text-[10px] block font-mono">Swaps: ${w.handSwaps} (${w.swapsC1} C1, ${w.swapsC2} C2)</span>
+                    <div data-wall-index="${idx}" class="flex items-center justify-between bg-slate-950 p-2 rounded border border-slate-800 text-[11px]">
+                        <div class="flex items-start gap-2 min-w-0">
+                            <span data-drag-handle class="text-slate-600 hover:text-slate-400 cursor-grab select-none leading-4 touch-none" title="Drag to reorder">⋮⋮</span>
+                            <div class="min-w-0">
+                                <button type="button" data-action="rename" class="font-medium text-slate-200 hover:text-cyan-300 text-left truncate max-w-full" title="Click to rename">${escapeHtml(w.name)}</button>
+                                <span class="text-slate-500 block font-mono">C1: ${inv.c1Sheets}+${inv.extraC1} | C2: ${inv.c2Sheets}+${inv.extraC2} (${inv.totalSheets} sheets${voidCount ? `, ${voidCount} voids` : ''}${w.settings.invertColors ? ', inverted' : ''})</span>
+                                <span class="text-amber-400 text-[10px] block font-mono">Swaps: ${inv.handSwaps} (${inv.swappedC1} C1, ${inv.swappedC2} C2)</span>
+                            </div>
                         </div>
                         <div class="flex items-center gap-2 ml-2">
-                            <button data-action="load" data-index="${idx}" class="text-cyan-400 hover:text-cyan-300" title="Load this wall">Load</button>
-                            <button data-action="remove" data-index="${idx}" class="text-rose-400 hover:text-rose-300" title="Remove from takeoff">✕</button>
+                            <button type="button" data-action="load" class="text-cyan-400 hover:text-cyan-300" title="Load this wall">Load</button>
+                            <button type="button" data-action="remove" class="text-rose-400 hover:text-rose-300" title="Remove from takeoff">✕</button>
                         </div>
                     </div>
                 `;
@@ -1928,21 +2055,95 @@
             list.innerHTML = html;
         }
 
+        // Replaces the name button with an input. Enter or leaving the field saves; Escape cancels.
+        function startRename(row, index) {
+            const nameBtn = row.querySelector('[data-action="rename"]');
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = savedWalls[index].name;
+            input.maxLength = 60;
+            input.className = 'w-full bg-slate-900 border border-cyan-600 rounded px-1.5 py-0.5 text-[11px] text-slate-100 focus:outline-none';
+            nameBtn.replaceWith(input);
+            input.focus();
+            input.select();
+
+            let done = false;
+            const finish = (save) => {
+                if (done) return;
+                done = true;
+                if (save) savedWalls[index].name = sanitizeWallName(input.value, savedWalls[index].name);
+                renderSavedWallsList();
+                scheduleRender();
+            };
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') finish(true);
+                else if (e.key === 'Escape') finish(false);
+            });
+            input.addEventListener('blur', () => finish(true));
+        }
+
+        // Drag a row by its handle; the row moves in the DOM while dragging and the new order is
+        // applied on release. Pointer events, so it also works with touch.
+        function bindDragReorder(list) {
+            let drag = null;
+            list.addEventListener('pointerdown', (e) => {
+                const handle = e.target.closest('[data-drag-handle]');
+                if (!handle || e.button !== 0) return;
+                e.preventDefault();
+                const row = handle.closest('[data-wall-index]');
+                try {
+                    list.setPointerCapture(e.pointerId);
+                } catch {
+                    // no active pointer with this id (synthetic event); moves still reach the list
+                }
+                row.classList.add('opacity-60', 'border-cyan-600');
+                drag = { row, pointerId: e.pointerId };
+            });
+            list.addEventListener('pointermove', (e) => {
+                if (!drag || e.pointerId !== drag.pointerId) return;
+                const rows = [...list.querySelectorAll('[data-wall-index]')].filter(r => r !== drag.row);
+                const before = rows.find(r => {
+                    const rect = r.getBoundingClientRect();
+                    return e.clientY < rect.top + rect.height / 2;
+                });
+                if (before) list.insertBefore(drag.row, before);
+                else rows.length && rows[rows.length - 1].after(drag.row);
+            });
+            const end = (e, apply) => {
+                if (!drag || e.pointerId !== drag.pointerId) return;
+                drag = null;
+                if (apply) {
+                    const order = [...list.querySelectorAll('[data-wall-index]')].map(r => Number(r.dataset.wallIndex));
+                    savedWalls = order.map(i => savedWalls[i]);
+                }
+                renderSavedWallsList();
+            };
+            list.addEventListener('pointerup', (e) => end(e, true));
+            list.addEventListener('pointercancel', (e) => end(e, false));
+        }
+
         function bindSavedWallsList() {
-            document.getElementById('savedWallsList').addEventListener('click', (e) => {
+            const list = document.getElementById('savedWallsList');
+            list.addEventListener('click', (e) => {
                 const btn = e.target.closest('button[data-action]');
-                if (!btn) return;
-                const index = Number(btn.dataset.index);
+                const row = e.target.closest('[data-wall-index]');
+                if (!btn || !row) return;
+                const index = Number(row.dataset.wallIndex);
                 const wall = savedWalls[index];
                 if (!wall) return;
                 if (btn.dataset.action === 'remove') {
                     savedWalls.splice(index, 1);
                     renderSavedWallsList();
+                    scheduleRender();
                 } else if (btn.dataset.action === 'load') {
-                    // Saved by this version, so nothing is adjusted
-                    setState(stateFromConfig(wall.config, state).next);
+                    // Only the wall's own settings; the shared colors stay
+                    linkedWall = wall;
+                    setState(wall.settings);
+                } else if (btn.dataset.action === 'rename') {
+                    startRename(row, index);
                 }
             });
+            bindDragReorder(list);
         }
 
         // ---- src/app.js ----
@@ -1965,13 +2166,18 @@
         // Zoom/pan of the on-screen view. Pan is in CSS px from the centered position.
         const nav = { zoom: 1, panX: 0, panY: 0 };
 
+        // Pipeline stages 1–3 for one wall's state (also used for saved walls' counts)
+        function computeWall(s) {
+            const grid = buildSheetGrid(s);
+            markCutTiles(grid, s);
+            assignColors(grid, s);
+            return { grid, inventory: computeInventory(grid) };
+        }
+
         function renderTiling() {
             // Grid, colors and inventory only depend on state; pan/zoom/resize reuse them
             if (state !== lastState) {
-                lastGrid = buildSheetGrid(state);
-                markCutTiles(lastGrid, state);
-                assignColors(lastGrid, state);
-                lastInventory = computeInventory(lastGrid);
+                ({ grid: lastGrid, inventory: lastInventory } = computeWall(state));
                 lastState = state;
                 renderDashboard(lastInventory);
             }
@@ -1985,7 +2191,7 @@
                 c.height = Math.round(lastView.cssHeight * dpr);
             }
 
-            renderCanvas(tileCtx, lastView, lastGrid, lastInventory, state);
+            renderCanvas(tileCtx, lastView, lastGrid, lastInventory, state, currentWallName(state));
             zoomLabel.textContent = Math.round(nav.zoom * 100) + '%';
             drawHud();
         }
@@ -2003,7 +2209,7 @@
             const exportCanvas = document.createElement('canvas');
             exportCanvas.width = Math.round(view.cssWidth * view.dpr);
             exportCanvas.height = Math.round(view.cssHeight * view.dpr);
-            renderCanvas(exportCanvas.getContext('2d'), view, lastGrid, lastInventory, state);
+            renderCanvas(exportCanvas.getContext('2d'), view, lastGrid, lastInventory, state, currentWallName(state));
 
             exportCanvas.toBlob((blob) => {
                 if (!blob) {
@@ -2038,7 +2244,7 @@
         const configStatusMsg = document.getElementById('configStatusMsg');
 
         function openConfigModal() {
-            configJsonTextarea.value = JSON.stringify(configFromState(state), null, 2);
+            configJsonTextarea.value = JSON.stringify(configFromProject(state, getSavedWalls()), null, 2);
             configStatusMsg.textContent = '';
             configModal.classList.remove('hidden');
         }
@@ -2070,8 +2276,10 @@
                 return;
             }
 
-            const { next, warnings } = stateFromConfig(parsed, state);
-            setState(next);
+            // The config replaces the saved walls and the colors; the wall being edited starts over
+            const { colors, walls, warnings } = projectFromConfig(parsed, state);
+            setSavedWalls(walls);
+            setState({ ...wallSettings(DEFAULTS), ...colors });
 
             if (warnings.length) {
                 configStatusMsg.textContent = 'Applied with adjustments: ' + warnings.join('; ');
@@ -2114,6 +2322,12 @@
         const hexPaint = document.getElementById('hexPaint');
         const hexGrout = document.getElementById('hexGrout');
 
+        const posTile1 = document.getElementById('posTile1');
+        const posTile2 = document.getElementById('posTile2');
+        const invertColorsCheck = document.getElementById('invertColorsCheck');
+        const zoneTopLabel = document.getElementById('zoneTopLabel');
+        const zoneBottomLabel = document.getElementById('zoneBottomLabel');
+
         const showSheetOverlayCheck = document.getElementById('showSheetOverlayCheck');
         const voidList = document.getElementById('voidList');
         // Push state into every control and readout. A number input that has focus is left alone
@@ -2144,6 +2358,14 @@
             hexTile2.textContent = s.colorTile2.toUpperCase();
             hexPaint.textContent = s.colorPaint.toUpperCase();
             hexGrout.textContent = s.colorGrout.toUpperCase();
+
+            // The bands (and their sliders) stay top/bottom; invert swaps which color fills them
+            const [topN, bottomN] = s.invertColors ? [2, 1] : [1, 2];
+            invertColorsCheck.checked = s.invertColors;
+            posTile1.textContent = s.invertColors ? 'Bottom' : 'Top';
+            posTile2.textContent = s.invertColors ? 'Top' : 'Bottom';
+            zoneTopLabel.textContent = `Solid Color ${topN} (Top)`;
+            zoneBottomLabel.textContent = `Solid Color ${bottomN} (Bottom)`;
 
             showSheetOverlayCheck.checked = s.showSheetOverlay;
             syncVoidList(s, setValue);
@@ -2198,6 +2420,12 @@
             inputTile2.addEventListener('input', (e) => setState({ colorTile2: e.target.value }));
             inputPaint.addEventListener('input', (e) => setState({ colorPaint: e.target.value }));
             inputGrout.addEventListener('input', (e) => setState({ colorGrout: e.target.value }));
+
+            // Invert: hand flips swap too, so a flipped tile stays the odd one out
+            invertColorsCheck.addEventListener('change', (e) => {
+                const swapped = Object.fromEntries(Object.entries(state.manualOverrides).map(([key, idx]) => [key, 1 - idx]));
+                setState({ invertColors: e.target.checked, manualOverrides: swapped });
+            });
 
             // Sheet Overlay Toggle
             showSheetOverlayCheck.addEventListener('change', (e) => setState({ showSheetOverlay: e.target.checked }));

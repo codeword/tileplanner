@@ -42,7 +42,7 @@ export const VOID_BADGE_RADIUS_PX = 8;
 // Spec card (CSS px). It sits in the painted area when that fits at the fitted scale,
 // otherwise in a strip added below the bottom margin.
 export const CARD_WIDTH_PX = 480;
-export const CARD_HEIGHT_PX = 118;
+export const CARD_HEIGHT_PX = 134;
 export const CARD_MARGIN_PX = 16;
 
 // Navigation (view only, not saved in config)
@@ -60,4 +60,6 @@ export const WASTE_FACTOR = 1.10;
 // v3: color1/C1 is the top color (v1/v2 had color1 at the bottom). v4: adds voids.
 // v5: same fields; the pattern math changed (integer hash, floor-based rows), so older
 // configs load with their settings but render a different pattern.
-export const CONFIG_VERSION = 5;
+// v6: shared colors plus a list of saved walls; tiledSubZones.color2Percent became
+// bottomPercent, and each wall has invertColors.
+export const CONFIG_VERSION = 6;

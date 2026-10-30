@@ -5,7 +5,7 @@ Web app for planning a tile wall built from Merola Tile "Metro Rhombus" mosaic s
 ## Working on it
 - **Edit `src/`, never `tile-planner.html`.** After changing `src/`, run `python3 build.py` (stdlib only, no Node needed) and commit both.
 - Develop by serving the repo (`python3 -m http.server`) and opening `/src/index.html`. Module files don't load from `file://`; the built file does, because its code is one inline `<script type="module">`.
-- `build.py` concatenates modules in dependency order into one scope (drops imports, strips `export`). It fails on duplicate top-level names across modules and on names used from another module without an import (those work in the bundle but break `src/`). Only `export function|const|let|class` and `import { a, b } from './x.js'` are supported.
+- `build.py` concatenates modules in dependency order into one scope (drops imports, strips `export`). It fails on duplicate top-level names across modules and on names used from another module without an import (those work in the bundle but break `src/`; template-literal text is ignored by that check, `${}` expressions aren't). Only `export function|const|let|class` and `import { a, b } from './x.js'` are supported.
 
 ## Layout (`src/`)
 | Module | Contents |
@@ -15,15 +15,15 @@ Web app for planning a tile wall built from Merola Tile "Metro Rhombus" mosaic s
 | `fades.js` | `FADES` registry, `BOUNDARY_OCTAVES`, `getNormalizedZones`, `assignColors` |
 | `geometry.js` | `floorRowIndex`, `overrideKey`, wall/void clipping, `buildSheetGrid`, `markCutTiles`, `isPointInPolygon` |
 | `inventory.js` | `computeInventory` |
-| `state.js` | `DEFAULTS`, `LIMITS`, `normalizeState`, voids/overrides sanitizing, `state`, `setState`, `onStateChange` |
+| `state.js` | `DEFAULTS`, `LIMITS`, `normalizeState`, voids/overrides sanitizing, `WALL_KEYS` / `wallSettings`, `state`, `setState`, `onStateChange` |
 | `view.js` | `computeView`, `toScreen`, `toWall` |
 | `renderer.js` | `renderCanvas`, `drawSpecCard`, label helpers |
-| `config.js` | `configFromState`, `stateFromConfig` (pure; any version → state + warnings) |
-| `app.js` | Render loop (`scheduleRender`, `renderTiling`, `last*`, `nav`), PNG export |
+| `config.js` | `configFromProject`, `projectFromConfig` (pure; any version → shared colors + saved walls + warnings), `sanitizeWallName` |
+| `app.js` | `computeWall` (grid → cut tiles → colors → inventory), render loop (`scheduleRender`, `renderTiling`, `last*`, `nav`), PNG export |
 | `ui/canvases.js` | Plan and HUD canvases |
 | `ui/controls.js` | `syncControls`, `bindInputs`, void list |
 | `ui/pointer.js` | Click/drag/pan/zoom, cursor HUD |
-| `ui/takeoff.js` | Dashboard bar, saved walls |
+| `ui/takeoff.js` | Dashboard bar, saved walls (rename, drag reorder, `getSavedWalls` / `setSavedWalls`) |
 | `ui/config-modal.js` | Config JSON modal |
 | `main.js` | Wires `onStateChange(syncControls)` and `onStateChange(scheduleRender)`, binds inputs, `window.planner` |
 
@@ -36,13 +36,13 @@ The pipeline modules (`noise`, `fades`, `geometry`, `inventory`, `view`, `config
 - Five fade styles: lightning (jagged teeth), Bayer 4×4 dither, cellular clusters, glitch scanlines, blue-noise dissolve. Plus "rogue noise" that scatters opposite-color tiles outside the transition band.
 - Deterministic: all randomness from seeded hashes (`currentSeed`).
 - Takeoff: each sheet labeled by majority color (tie → C2, the bottom color). Minority tiles = hand-swaps. Box order = ceil(sheets × 1.10 / 10).
-- Extras: click a tile to flip it (manualOverrides), save multiple walls for a combined order, JSON config export/import, PNG download.
+- Extras: click a tile to flip it (manualOverrides), invert colors per wall, save multiple named walls for a combined order, JSON config export/import, PNG download.
 
 ## State model (done: refactor step 1)
 - One `state` object, defaults only in `DEFAULTS`, ranges in `LIMITS`. All changes go through `setState(patch)` → `normalizeState` (clamps, validates, caps tiled height at total height) → `syncControls()` → `scheduleRender()`. HTML controls carry no default values.
 - Tiles carry `baseColorIdx` / `colorIdx`: constants `C1 = 0` (top color) and `C2 = 1` (bottom color). Hex is looked up from `palette` only when drawing. Sheet outlines: orange = C1 majority, blue = C2.
 - `manualOverrides` maps `${col}_f${tierAboveFloor}_${type}` → 0|1. The tier is counted up from the floor (`floorRowIndex`), so flips stay put when the tiled height changes. The pattern hashes use `floorRow` too (since the bug 2–4 fixes); `row` (from the top) is only the layout loop index. Row stagger is fixed per sheet: rows 1 and 3 of each sheet (from the top) sit half a cube (`CUBE_DX_INCHES`, 1.75″) right of rows 2 and 4.
-- Config JSON is now `version: 5` (v3 made `colors.color1` = top, `tiledSubZones.color2Percent` = bottom band). In v1/v2, color1 and `color1Percent` were the bottom color; those are mapped on import, v2 override indices are flipped, and v1 hex/row-from-top overrides are converted. Rejected or clamped fields are listed in the modal instead of being applied silently.
+- Config JSON is now `version: 6` (see "Invert and saved walls"; v3 made `colors.color1` = top, `tiledSubZones.color2Percent` = bottom band). In v1/v2, color1 and `color1Percent` were the bottom color; those are mapped on import, v2 override indices are flipped, and v1 hex/row-from-top overrides are converted. Rejected or clamped fields are listed in the modal instead of being applied silently.
 
 ## Render pipeline (done: refactor step 2)
 `renderTiling()` runs `buildSheetGrid(state)` → `assignColors(grid, state)` → `computeInventory(grid)` → `computeView(state, viewport, dpr)` → `renderCanvas(ctx, view, grid, inventory, state)` → `renderDashboard(inventory)`, and keeps `lastGrid` / `lastInventory` / `lastView`.
@@ -75,7 +75,7 @@ Fixes 2–4 changed the pattern for every seed (config `version: 5`; older confi
 4. ~~Work in inches with one canvas transform~~ (done). Deriving the sheet height from tile geometry is deferred (known bug 3).
 5. ~~**Fade algorithm registry**~~ (done). `FADES = { id: { label, params, assign(tile, ctx, params) } }`; `ctx` = `{ dist, transSpan, typeIdx, seed }`, returns C1/C2. `ALGORITHMS` and the `<select>` options come from it. The boundary octaves are `BOUNDARY_OCTAVES`; rogue noise uses `ROGUE_SALT` / `ROGUE_SEED_OFFSET`. Hash salts stay inline in each fade (they only decorrelate streams).
 6. ~~Split into ES modules~~ (done; see Layout). `setState` no longer calls the UI directly: listeners registered with `onStateChange` run in order.
-7. ~~Saved walls~~ (done): each stores `config: configFromState(state)` plus its counts, and has Load and ✕ buttons handled by one delegated listener (`bindSavedWallsList`). Import is split into `stateFromConfig(parsed, base)` → `{ next, warnings }` (pure) and `applyConfigJson` (modal). Saved walls still live in memory only.
+7. ~~Saved walls~~ (done; reworked in "Invert and saved walls"). Load, rename, ✕ and drag are handled by delegated listeners (`bindSavedWallsList`). Import is split into `projectFromConfig(parsed, base)` (pure) and `applyConfigJson` (modal). Saved walls live in memory and in the config JSON only.
 
 Constraint: for the same seed and settings, the refactored version should render the identical pattern, so before/after can be compared.
 
@@ -99,11 +99,17 @@ From a feature audit written with Gemini, rebuilt on the state model. All coordi
 - Boxes per color: ceil((sheets + extra) × 1.10 / 10). Total = sum.
 - The dashboard shows sheets, extra and boxes per color, swaps, spares and the order. Saved walls store extras and total boxes per color.
 
-**Spec card** (`drawSpecCard`): wall/grid line, one row per color (swatch, hex, sheets + extra → boxes), swaps, spares and the order. It is laid out at 480×118 and scaled down uniformly to fit. `computeView` places it in the painted area when that fits at the fitted scale, otherwise in a strip added below the bottom margin (`view.card`); zoom never moves it.
+**Spec card** (`drawSpecCard`): wall name, wall/grid line, one row per color (swatch, hex, sheets + extra → boxes), swaps, spares and the order. It is laid out at 480×134 and scaled down uniformly to fit. The name is that of the saved wall last saved or loaded (`currentWallName` in `ui/takeoff.js`) while the wall being edited still has exactly its settings, so renaming it updates the card; otherwise the card shows a grey "Unsaved wall". `renderCanvas` takes it as its last argument, so the PNG export includes it. `computeView` places it in the painted area when that fits at the fitted scale, otherwise in a strip added below the bottom margin (`view.card`); zoom never moves it.
 
 **PNG export**: the fitted plan at 4×. No × badges, HUD or drag preview. Sheet outlines/badges only if the overlay is on.
 
 **Still open (defaults chosen):** label units (now exact decimals like 36.0625″; fractions like 36 1/16″ would be a change to `formatLength` only; the HUD uses `formatInches`, 1 decimal); the exact export resolution; drag-to-paint (would need a modifier key, since plain drag draws voids).
+
+## Invert and saved walls (config v6)
+- **Invert** (`state.invertColors`, per wall; sidebar "Invert: Color 2 on top"): the same pattern repainted with the colors swapped, applied in `assignColors` after the fade and rogue noise and before overrides. The bands and their sliders stay top/bottom (`floorPercent` is the bottom band, whichever color fills it); the labels say which color is where. Overrides store the color shown, so the toggle swaps them too and hand flips stay flips.
+- **Shared vs per wall.** Tile/paint/grout colors and the sheet overlay are shared; `WALL_KEYS` (dimensions, zones, fade, seed, invert, overrides, voids) are per wall. A saved wall is `{ name, settings: wallSettings(state) }`. Load applies only its settings, so it shows in the current colors. Counts are recomputed with `computeWall` and cached per settings object.
+- **List UI:** click a name to rename it (Enter/blur saves, Escape cancels; trimmed, max 60 chars, HTML-escaped). Drag the ⋮⋮ handle to reorder (pointer events, so touch works).
+- **Config v6:** `{ version, colors: { color1, color2, paintedWall, grout }, walls: [{ name, invertColors, physicalWallInches, tiledSubZones: { bottomPercent, transitionPercent }, algorithm, manualOverrides, voids }] }`. Only saved walls are in it, not the wall being edited. Applying a config replaces the saved list and the colors and resets the wall being edited to `DEFAULTS`. A v1–v5 config becomes one saved wall named "Imported wall". Warnings are prefixed with the wall name.
 
 ## Takeoff accuracy improvements
 - Done in step 4: per-color boxes, swap supply with spares, and the cut-tile rule.
@@ -116,7 +122,7 @@ From a feature audit written with Gemini, rebuilt on the state model. All coordi
 - Snapshot tests of the pure stages using fixed seeds.
 
 ## UX backlog
-- High value: printable per-sheet swap map; undo/redo (including void edits); confirm before Re-Seed wipes manual edits; editable seed field with history; autosave to localStorage and URL-hash sharing; saved walls that persist and can be reopened.
+- High value: printable per-sheet swap map; undo/redo (including void edits); confirm before Re-Seed wipes manual edits; editable seed field with history; autosave to localStorage and URL-hash sharing; saved walls that persist across reloads (they can be reopened, named and reordered, but live in memory and the config JSON only).
 - Deferred: drag-to-paint (not needed yet).
 - Polish: hover-highlight sheet; zone bar in actual tile colors; indicate when transition % is clamped; clean preview mode; responsive layout; ft-in and metric display; named walls; label/`for` accessibility and C1/C2 letters on sheet badges.
 

@@ -1,13 +1,14 @@
 // Config JSON modal: show, copy and apply.
-import { configFromState, stateFromConfig } from '../config.js';
-import { setState, state } from '../state.js';
+import { configFromProject, projectFromConfig } from '../config.js';
+import { DEFAULTS, setState, state, wallSettings } from '../state.js';
+import { getSavedWalls, setSavedWalls } from './takeoff.js';
 
 const configModal = document.getElementById('configModal');
 const configJsonTextarea = document.getElementById('configJsonTextarea');
 const configStatusMsg = document.getElementById('configStatusMsg');
 
 export function openConfigModal() {
-    configJsonTextarea.value = JSON.stringify(configFromState(state), null, 2);
+    configJsonTextarea.value = JSON.stringify(configFromProject(state, getSavedWalls()), null, 2);
     configStatusMsg.textContent = '';
     configModal.classList.remove('hidden');
 }
@@ -39,8 +40,10 @@ export function applyConfigJson() {
         return;
     }
 
-    const { next, warnings } = stateFromConfig(parsed, state);
-    setState(next);
+    // The config replaces the saved walls and the colors; the wall being edited starts over
+    const { colors, walls, warnings } = projectFromConfig(parsed, state);
+    setSavedWalls(walls);
+    setState({ ...wallSettings(DEFAULTS), ...colors });
 
     if (warnings.length) {
         configStatusMsg.textContent = 'Applied with adjustments: ' + warnings.join('; ');

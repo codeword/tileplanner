@@ -37,6 +37,12 @@ const hexTile2 = document.getElementById('hexTile2');
 const hexPaint = document.getElementById('hexPaint');
 const hexGrout = document.getElementById('hexGrout');
 
+const posTile1 = document.getElementById('posTile1');
+const posTile2 = document.getElementById('posTile2');
+const invertColorsCheck = document.getElementById('invertColorsCheck');
+const zoneTopLabel = document.getElementById('zoneTopLabel');
+const zoneBottomLabel = document.getElementById('zoneBottomLabel');
+
 const showSheetOverlayCheck = document.getElementById('showSheetOverlayCheck');
 const voidList = document.getElementById('voidList');
 // Push state into every control and readout. A number input that has focus is left alone
@@ -67,6 +73,14 @@ export function syncControls() {
     hexTile2.textContent = s.colorTile2.toUpperCase();
     hexPaint.textContent = s.colorPaint.toUpperCase();
     hexGrout.textContent = s.colorGrout.toUpperCase();
+
+    // The bands (and their sliders) stay top/bottom; invert swaps which color fills them
+    const [topN, bottomN] = s.invertColors ? [2, 1] : [1, 2];
+    invertColorsCheck.checked = s.invertColors;
+    posTile1.textContent = s.invertColors ? 'Bottom' : 'Top';
+    posTile2.textContent = s.invertColors ? 'Top' : 'Bottom';
+    zoneTopLabel.textContent = `Solid Color ${topN} (Top)`;
+    zoneBottomLabel.textContent = `Solid Color ${bottomN} (Bottom)`;
 
     showSheetOverlayCheck.checked = s.showSheetOverlay;
     syncVoidList(s, setValue);
@@ -121,6 +135,12 @@ export function bindInputs() {
     inputTile2.addEventListener('input', (e) => setState({ colorTile2: e.target.value }));
     inputPaint.addEventListener('input', (e) => setState({ colorPaint: e.target.value }));
     inputGrout.addEventListener('input', (e) => setState({ colorGrout: e.target.value }));
+
+    // Invert: hand flips swap too, so a flipped tile stays the odd one out
+    invertColorsCheck.addEventListener('change', (e) => {
+        const swapped = Object.fromEntries(Object.entries(state.manualOverrides).map(([key, idx]) => [key, 1 - idx]));
+        setState({ invertColors: e.target.checked, manualOverrides: swapped });
+    });
 
     // Sheet Overlay Toggle
     showSheetOverlayCheck.addEventListener('change', (e) => setState({ showSheetOverlay: e.target.checked }));

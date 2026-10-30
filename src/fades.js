@@ -130,6 +130,10 @@ export function assignColors(grid, s) {
             }
         }
 
+        // Invert repaints the same pattern with the colors swapped. Overrides are stored as
+        // the color shown, so they are applied after it.
+        if (s.invertColors) tile.baseColorIdx = 1 - tile.baseColorIdx;
+
         // Apply manual override if set
         const override = s.manualOverrides[tile.overrideKey];
         tile.colorIdx = (override !== undefined) ? override : tile.baseColorIdx;

@@ -21,6 +21,9 @@ export const DEFAULTS = Object.freeze({
     colorPaint: '#b3faff',
     colorGrout: '#333333',
 
+    // Paints Color 2 in the top band and Color 1 in the bottom one; the pattern is unchanged
+    invertColors: false,
+
     showSheetOverlay: true,
     // Keyed by overrideKey(); value is the color index (C1 = 0 top, C2 = 1 bottom)
     manualOverrides: Object.freeze({}),
@@ -38,7 +41,7 @@ const LIMITS = {
     outlierPct: [0, 25]
 };
 
-const COLOR_KEYS = ['colorTile1', 'colorTile2', 'colorPaint', 'colorGrout'];
+export const COLOR_KEYS = ['colorTile1', 'colorTile2', 'colorPaint', 'colorGrout'];
 const HEX_COLOR_RE = /^#[0-9a-f]{6}$/i;
 const OVERRIDE_KEY_RE = /^-?\d+_f-?\d+_(top|left|right)$/;
 
@@ -104,10 +107,23 @@ export function normalizeState(s, prev = DEFAULTS) {
         out[key] = HEX_COLOR_RE.test(s[key]) ? s[key].toLowerCase() : prev[key];
     }
 
+    out.invertColors = Boolean(s.invertColors);
     out.showSheetOverlay = Boolean(s.showSheetOverlay);
     out.manualOverrides = sanitizeOverrides(s.manualOverrides);
     out.voids = sanitizeVoids(s.voids);
     return out;
+}
+
+// Settings that belong to one wall. The tile/paint/grout colors and the sheet overlay are
+// shared by all walls.
+export const WALL_KEYS = Object.freeze([
+    'wallWidthInches', 'wallTotalHeightInches', 'tiledHeightInches',
+    'floorPercent', 'transPercent', 'outlierPct', 'algorithm', 'seed',
+    'invertColors', 'manualOverrides', 'voids'
+]);
+
+export function wallSettings(s) {
+    return Object.fromEntries(WALL_KEYS.map(key => [key, s[key]]));
 }
 
 export let state = normalizeState(DEFAULTS);

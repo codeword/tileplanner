@@ -55,10 +55,50 @@ def load_order(entry):
     return order
 
 
+def strip_template_text(code):
+    """Blank the literal text of template strings, keeping the ${...} expressions (which may
+    hold nested templates)."""
+    out, i, depth = [], 0, []  # depth: brace counts of open ${ } inside templates
+    in_template = False
+    while i < len(code):
+        c = code[i]
+        if in_template:
+            if c == '\\':
+                i += 2
+                continue
+            if c == '`':
+                in_template = False
+                out.append('``')
+            elif code.startswith('${', i):
+                in_template = False
+                depth.append(0)
+                out.append(' ')
+                i += 2
+                continue
+            i += 1
+            continue
+        if c == '`':
+            in_template = True
+        elif depth and c == '{':
+            depth[-1] += 1
+        elif depth and c == '}':
+            if depth[-1] == 0:
+                depth.pop()
+                in_template = True
+                out.append(' ')
+                i += 1
+                continue
+            depth[-1] -= 1
+        out.append(c)
+        i += 1
+    return ''.join(out)
+
+
 def strip_comments_and_strings(code):
     code = re.sub(r'/\*.*?\*/', ' ', code, flags=re.S)
     code = re.sub(r"'(?:\\.|[^'\\\n])*'|\"(?:\\.|[^\"\\\n])*\"", "''", code)
-    return re.sub(r'//.*', '', code)
+    code = re.sub(r'//.*', '', code)
+    return strip_template_text(code)
 
 
 def missing_imports(order):

@@ -7,7 +7,8 @@ import { toScreen } from './view.js';
 // Tiles and sheet outlines are drawn in wall inches through one transform; text, badges and
 // wall lines are drawn in CSS px. Both include view.dpr, so the same code renders the
 // on-screen canvas and the high-res export.
-export function renderCanvas(ctx, view, grid, inventory, s) {
+// wallName: shown on the spec card when not empty
+export function renderCanvas(ctx, view, grid, inventory, s, wallName = '') {
     const { scale, dpr } = view;
     const useScreenSpace = () => ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const useWallSpace = () => ctx.setTransform(dpr * scale, 0, 0, -dpr * scale, dpr * view.originX, dpr * view.originY);
@@ -212,7 +213,7 @@ export function renderCanvas(ctx, view, grid, inventory, s) {
     ctx.restore();
 
     // 6. Specification & takeoff card (painted area, or the strip below the floor)
-    drawSpecCard(ctx, view.card, inventory, s);
+    drawSpecCard(ctx, view.card, inventory, s, wallName);
 
     ctx.restore(); // content clip
 
@@ -252,7 +253,7 @@ export function drawPill(ctx, text, cx, cy) {
 
 // Laid out at CARD_WIDTH_PX × CARD_HEIGHT_PX and scaled down uniformly when the space
 // (card.width) is narrower, so the text never runs past the card
-function drawSpecCard(ctx, card, inv, s) {
+function drawSpecCard(ctx, card, inv, s, wallName) {
     const k = Math.min(1, card.width / CARD_WIDTH_PX);
     if (k <= 0) return;
     const x = 0, y = 0, width = CARD_WIDTH_PX, height = CARD_HEIGHT_PX;
@@ -275,9 +276,16 @@ function drawSpecCard(ctx, card, inv, s) {
     ctx.font = 'bold 11px Inter, sans-serif';
     ctx.fillText('INSTALLATION SPECIFICATIONS & MATERIAL TAKEOFF', left, y + 10);
 
+    // Wall name: the saved wall this one matches, shortened with … to fit
+    ctx.font = 'bold 11px JetBrains Mono, monospace';
+    ctx.fillStyle = wallName ? '#22d3ee' : '#64748b';
+    let name = wallName || 'Unsaved wall';
+    while (name.length > 1 && ctx.measureText(name).width > width - 24) name = name.slice(0, -2) + '…';
+    ctx.fillText(name, left, y + 26);
+
     ctx.font = '10px JetBrains Mono, monospace';
     ctx.fillStyle = '#94a3b8';
-    ctx.fillText(`WALL: ${s.wallWidthInches}″ W × ${s.wallTotalHeightInches}″ H (Tiled ${s.tiledHeightInches}″)  |  GRID: ${inv.totalSheets} Sheets (${inv.gridCols}×${inv.gridRows})`, left, y + 28);
+    ctx.fillText(`WALL: ${s.wallWidthInches}″ W × ${s.wallTotalHeightInches}″ H (Tiled ${s.tiledHeightInches}″)  |  GRID: ${inv.totalSheets} Sheets (${inv.gridCols}×${inv.gridRows})`, left, y + 44);
 
     // One row per color: swatch, hex, sheets, extra sheets, boxes
     const colorRow = (rowY, hex, name, accent, sheets, extra, boxes) => {
@@ -295,12 +303,12 @@ function drawSpecCard(ctx, card, inv, s) {
         ctx.font = '10px JetBrains Mono, monospace';
         ctx.fillText(`${sheets} sheets + ${extra} extra → ${boxes} ${boxes === 1 ? 'box' : 'boxes'}`, left + 140, rowY);
     };
-    colorRow(y + 46, s.colorTile1, 'Color 1', '#f59e0b', inv.c1Sheets, inv.extraC1, inv.boxesC1);
-    colorRow(y + 62, s.colorTile2, 'Color 2', '#38bdf8', inv.c2Sheets, inv.extraC2, inv.boxesC2);
+    colorRow(y + 62, s.colorTile1, 'Color 1', '#f59e0b', inv.c1Sheets, inv.extraC1, inv.boxesC1);
+    colorRow(y + 78, s.colorTile2, 'Color 2', '#38bdf8', inv.c2Sheets, inv.extraC2, inv.boxesC2);
 
     ctx.fillStyle = '#cbd5e1';
-    ctx.fillText(`Hand-swaps: ${inv.handSwaps} tiles (${inv.swappedC1} C1 into C2 sheets, ${inv.swappedC2} C2 into C1 sheets)`, left, y + 80);
-    ctx.fillText(`Spares from cuts: ${inv.spareC1} C1, ${inv.spareC2} C2  |  Order: ${inv.boxes} boxes (incl. 10% waste)`, left, y + 96);
+    ctx.fillText(`Hand-swaps: ${inv.handSwaps} tiles (${inv.swappedC1} C1 into C2 sheets, ${inv.swappedC2} C2 into C1 sheets)`, left, y + 96);
+    ctx.fillText(`Spares from cuts: ${inv.spareC1} C1, ${inv.spareC2} C2  |  Order: ${inv.boxes} boxes (incl. 10% waste)`, left, y + 112);
 
     ctx.restore();
 }

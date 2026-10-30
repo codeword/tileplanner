@@ -137,7 +137,7 @@
                         <div class="flex items-center gap-2.5">
                             <input type="color" id="colorTile1">
                             <div>
-                                <div class="text-xs font-medium text-slate-200">Color 1 (Top)</div>
+                                <div class="text-xs font-medium text-slate-200">Color 1 (<span id="posTile1"></span>)</div>
                                 <div id="hexTile1" class="text-[10px] font-mono text-slate-500 uppercase"></div>
                             </div>
                         </div>
@@ -149,12 +149,21 @@
                         <div class="flex items-center gap-2.5">
                             <input type="color" id="colorTile2">
                             <div>
-                                <div class="text-xs font-medium text-slate-200">Color 2 (Bottom)</div>
+                                <div class="text-xs font-medium text-slate-200">Color 2 (<span id="posTile2"></span>)</div>
                                 <div id="hexTile2" class="text-[10px] font-mono text-slate-500 uppercase"></div>
                             </div>
                         </div>
                         <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-cyan-950/80 text-cyan-400 border border-cyan-800/50">C2 (Blue)</span>
                     </div>
+
+                    <!-- Invert: Color 2 on top (per wall) -->
+                    <label for="invertColorsCheck" class="flex items-center justify-between bg-slate-950 p-2 rounded-lg border border-slate-800 cursor-pointer select-none">
+                        <span class="flex items-center gap-2.5">
+                            <input type="checkbox" id="invertColorsCheck" class="rounded border-slate-700 text-cyan-500 focus:ring-0 cursor-pointer">
+                            <span class="text-xs font-medium text-slate-200">Invert: Color 2 on top</span>
+                        </span>
+                        <span class="text-[10px] text-slate-500">this wall</span>
+                    </label>
 
                     <!-- Wall Paint -->
                     <div class="flex items-center justify-between bg-slate-950 p-2 rounded-lg border border-slate-800">
@@ -191,9 +200,9 @@
 
                 <!-- Live Sub-Zone Bar (left to right = top of the tiled area to the floor) -->
                 <div class="h-3 w-full bg-slate-950 rounded-full flex overflow-hidden border border-slate-800">
-                    <div id="barC1" class="bg-indigo-600 transition-all duration-150" title="Color 1 Base (top)"></div>
+                    <div id="barC1" class="bg-indigo-600 transition-all duration-150" title="Top band"></div>
                     <div id="barTrans" class="bg-amber-500 transition-all duration-150" title="Transition Fade"></div>
-                    <div id="barC2" class="bg-slate-300 transition-all duration-150" title="Color 2 Base (bottom)"></div>
+                    <div id="barC2" class="bg-slate-300 transition-all duration-150" title="Bottom band"></div>
                 </div>
 
                 <div class="space-y-3 pt-2">
@@ -202,12 +211,12 @@
                         <div class="flex justify-between text-xs mb-1">
                             <span class="text-slate-300 flex items-center gap-1.5">
                                 <span class="w-2 h-2 rounded-full bg-indigo-500 inline-block"></span>
-                                Solid Color 1 (Top)
+                                <span id="zoneTopLabel"></span>
                             </span>
                             <span id="c1PctVal" class="font-mono text-indigo-400 font-semibold"></span>
                         </div>
                         <div class="text-[11px] text-slate-500 font-mono">
-                            Automatically derived: 100% − Color 2% − Trans%
+                            Automatically derived: 100% − bottom % − transition %
                         </div>
                     </div>
 
@@ -216,7 +225,7 @@
                         <div class="flex justify-between text-xs mb-1">
                             <span class="text-slate-300 flex items-center gap-1.5">
                                 <span class="w-2 h-2 rounded-full bg-slate-300 inline-block"></span>
-                                Solid Color 2 (Bottom)
+                                <span id="zoneBottomLabel"></span>
                             </span>
                             <span id="c2PctVal" class="font-mono text-slate-300 font-semibold"></span>
                         </div>
