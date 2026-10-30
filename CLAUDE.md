@@ -34,7 +34,7 @@ Single-file web app (`tile-planner.html`) for planning a tile wall built from Me
 - Verifying refactors: compare against the previous version, scenario by scenario, on tile pattern (sheet, col/row/type, color index, center to 1e-5″) and takeoff numbers, which must match exactly. The step-2 transform shifts anti-aliasing on some tile edges (≤ 10/255 per channel), so exact pixel equality is no longer the bar.
 
 ## Known bugs (fix first)
-1. The Sheet Overlay `<button>` wraps a checkbox, so only the checkbox itself toggles. Use a `<label>`.
+1. ~~The Sheet Overlay `<button>` wraps a checkbox~~ (fixed: it's a `<label>` now).
 2. `hash2D` uses a float `*` instead of `Math.imul`, losing precision. Fixing it changes every pattern.
 3. Sheet row count uses `SHEET_HEIGHT_INCHES` (12.13″) while sheets are drawn `SHEET_DRAWN_HEIGHT_INCHES` (~12.124″) tall. Unifying them can change the row count for some tiled heights, so it changes output.
 4. Row parity (cube x-offset) is taken from the row counted from the top, so changing the tiled height by an odd number of tiers shifts the whole layout half a cube sideways.
@@ -44,9 +44,9 @@ Single-file web app (`tile-planner.html`) for planning a tile wall built from Me
 2. ~~Color indices (0/1) on tiles~~ (done)
 3. ~~Pipeline of pure functions~~ (done)
 4. ~~Work in inches with one canvas transform~~ (done). Deriving the sheet height from tile geometry is deferred (known bug 3).
-5. **Fade algorithm registry** (`FADES = { id: { label, params, assign } }`), building the `<select>` from it. Named params replace magic numbers.
+5. ~~**Fade algorithm registry**~~ (done). `FADES = { id: { label, params, assign(tile, ctx, params) } }`; `ctx` = `{ dist, transSpan, typeIdx, seed }`, returns C1/C2. `ALGORITHMS` and the `<select>` options come from it. The boundary octaves are `BOUNDARY_OCTAVES`; rogue noise uses `ROGUE_SALT` / `ROGUE_SEED_OFFSET`. Hash salts stay inline in each fade (they only decorrelate streams).
 6. Split into ES modules: constants, noise, geometry, fades/*, inventory, state, config, renderer, ui/controls, ui/takeoff.
-7. Saved walls should store the full config (their counts now come from `lastInventory`, not DOM text). Use event delegation instead of inline `onclick` and the `window.removeSavedWall` global.
+7. ~~Saved walls~~ (done): each stores `config: configFromState(state)` plus its counts, and has Load and ✕ buttons handled by one delegated listener (`bindSavedWallsList`). Import is split into `stateFromConfig(parsed, base)` → `{ next, warnings }` (pure) and `applyConfigJson` (modal). Saved walls still live in memory only.
 
 Constraint: for the same seed and settings, the refactored version should render the identical pattern, so before/after can be compared.
 

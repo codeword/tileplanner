@@ -53,10 +53,10 @@
                 </svg>
                 <span>Download PNG</span>
             </button>
-            <button id="toggleSheetGridBtn" class="px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-md border border-slate-700 transition flex items-center gap-1.5">
+            <label for="showSheetOverlayCheck" class="px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-md border border-slate-700 transition flex items-center gap-1.5 cursor-pointer select-none">
                 <input type="checkbox" id="showSheetOverlayCheck" class="rounded border-slate-700 text-cyan-500 focus:ring-0 cursor-pointer">
                 <span>Sheet Overlay</span>
-            </button>
+            </label>
             <button id="openConfigModalBtn" class="px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-md border border-slate-700 transition flex items-center gap-1.5">
                 <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
@@ -254,11 +254,7 @@
                 <div>
                     <label class="text-xs text-slate-400 block mb-1.5">Fade Style</label>
                     <select id="algorithmSelect" class="w-full bg-slate-950 border border-slate-800 rounded-md px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-cyan-500">
-                        <option value="lightning">Jagged Teeth / Lightning (High Contrast)</option>
-                        <option value="bayer">Ordered Matrix Dither (Bayer 4×4)</option>
-                        <option value="cellular">Organic Cellular Clusters</option>
-                        <option value="glitch">Glitch Displacement Scanlines</option>
-                        <option value="blueNoise">High-Frequency Blue Noise Dissolve</option>
+                        <!-- options are built from FADES -->
                     </select>
                 </div>
             </div>
@@ -455,9 +451,81 @@
         const SHEETS_PER_BOX = 10;
         const WASTE_FACTOR = 1.10;
 
-        const ALGORITHMS = ['lightning', 'bayer', 'cellular', 'glitch', 'blueNoise'];
         // v3: color1/C1 is the top color (v1/v2 had color1 at the bottom). v4: adds voids.
         const CONFIG_VERSION = 4;
+
+        // --- Fade algorithms ---
+        // Each fade picks a tile's base color in the tiled area from its signed distance to the
+        // wandering boundary (positive = above). `ctx` holds { dist, transSpan, typeIdx, seed }.
+        // `params` are the tuning knobs; the hash salts only decorrelate the noise streams.
+        const FADES = {
+            lightning: {
+                label: 'Jagged Teeth / Lightning (High Contrast)',
+                // Tiles within reach of the boundary jump to the other color with this chance
+                params: { toothReach: 0.48, toothChance: 0.25 },
+                assign(tile, ctx, p) {
+                    const toothSeed = hashScatter(tile.col, tile.row, ctx.typeIdx + 11, ctx.seed);
+                    const toothReach = ctx.transSpan * p.toothReach;
+                    if (ctx.dist < 0) {
+                        return (ctx.dist > -toothReach && toothSeed < p.toothChance) ? C1 : C2;
+                    }
+                    return (ctx.dist < toothReach && toothSeed < p.toothChance) ? C2 : C1;
+                }
+            },
+            bayer: {
+                label: 'Ordered Matrix Dither (Bayer 4×4)',
+                // Gradient spans this many transition heights, thresholded by the matrix
+                params: { gradientSpan: 1.05 },
+                assign(tile, ctx, p) {
+                    const bayerVal = BAYER_4X4[Math.abs(tile.row) % 4][Math.abs(tile.col) % 4];
+                    const rawGradient = Math.max(0, Math.min(1, 0.5 + ctx.dist / (ctx.transSpan * p.gradientSpan)));
+                    return (rawGradient > bayerVal) ? C1 : C2;
+                }
+            },
+            cellular: {
+                label: 'Organic Cellular Clusters',
+                // 2D value noise (per inch) pushes the boundary up or down by up to strength/2
+                params: { frequency: 0.18, strength: 0.85 },
+                assign(tile, ctx, p) {
+                    const clusterNoise = smoothNoise(tile.x * p.frequency, tile.y * p.frequency, ctx.seed + 42);
+                    const effectiveDist = ctx.dist + (clusterNoise - 0.5) * ctx.transSpan * p.strength;
+                    return (effectiveDist > 0) ? C1 : C2;
+                }
+            },
+            glitch: {
+                label: 'Glitch Displacement Scanlines',
+                // Rows whose hash exceeds rowThreshold shift the boundary by up to shift/2
+                params: { rowThreshold: 0.76, shift: 0.55 },
+                assign(tile, ctx, p) {
+                    const rowGlitch = hash2D(tile.row * 97, 13, ctx.seed);
+                    const isGlitchRow = rowGlitch > p.rowThreshold;
+                    const shiftOffset = isGlitchRow ? (hash2D(tile.row, 71, ctx.seed) - 0.5) * p.shift * ctx.transSpan : 0;
+                    return (ctx.dist + shiftOffset > 0) ? C1 : C2;
+                }
+            },
+            blueNoise: {
+                label: 'High-Frequency Blue Noise Dissolve',
+                // Linear gradient plus per-tile white noise of the given amplitude
+                params: { gradientSpan: 1.05, noiseAmount: 0.35 },
+                assign(tile, ctx, p) {
+                    const staticNoise = hashScatter(tile.col, tile.row, ctx.typeIdx + 37, ctx.seed);
+                    const t = Math.max(0, Math.min(1, 0.5 + ctx.dist / (ctx.transSpan * p.gradientSpan)));
+                    return (t + (staticNoise - 0.5) * p.noiseAmount > 0.5) ? C1 : C2;
+                }
+            }
+        };
+        const ALGORITHMS = Object.keys(FADES);
+
+        // Boundary between the bands: octaves of 1D value noise along x (frequency per inch),
+        // each sampled on its own row/seed offset and weighted; the sum is scaled by transSpan.
+        const BOUNDARY_OCTAVES = [
+            { frequency: 0.055, row: 1.3, seedOffset: 0, weight: 0.50 },
+            { frequency: 0.125, row: 4.7, seedOffset: 101, weight: 0.28 },
+            { frequency: 0.280, row: 8.2, seedOffset: 503, weight: 0.15 },
+            { frequency: 0.650, row: 13.9, seedOffset: 919, weight: 0.07 }
+        ];
+        const ROGUE_SALT = 79;
+        const ROGUE_SEED_OFFSET = 9973;
 
         // --- Core Application State ---
         // Single source of truth for defaults. Controls are filled from state by syncControls().
@@ -990,14 +1058,14 @@
             const transCenterAboveFloor = floorSpan + (transSpan * 0.5);
             const halfZone = transSpan * 0.5;
 
+            const fade = FADES[s.algorithm];
+
             for (const tile of grid.tiles) {
-                // Procedural jagged boundary in transition zone with non-repeating world-space noise octaves
-                const wx = tile.x;
-                const n1 = smoothNoise(wx * 0.055, 1.3, seed);
-                const n2 = smoothNoise(wx * 0.125, 4.7, seed + 101);
-                const n3 = smoothNoise(wx * 0.280, 8.2, seed + 503);
-                const n4 = smoothNoise(wx * 0.650, 13.9, seed + 919);
-                const displacement = (n1 - 0.5) * 0.50 + (n2 - 0.5) * 0.28 + (n3 - 0.5) * 0.15 + (n4 - 0.5) * 0.07;
+                // Wandering boundary from world-space noise octaves
+                let displacement = 0;
+                for (const o of BOUNDARY_OCTAVES) {
+                    displacement += (smoothNoise(tile.x * o.frequency, o.row, seed + o.seedOffset) - 0.5) * o.weight;
+                }
                 const boundaryAboveFloor = transCenterAboveFloor + displacement * transSpan;
 
                 const distToBoundary = tile.y - boundaryAboveFloor;
@@ -1006,39 +1074,12 @@
 
                 const typeIdx = TYPE_INDEX[tile.type];
 
-                // Base color index selection: C1 above the boundary, C2 below
-                if (s.algorithm === 'lightning') {
-                    const toothSeed = hashScatter(tile.col, tile.row, typeIdx + 11, seed);
-                    const toothReach = transSpan * 0.48;
-
-                    if (distToBoundary < 0) {
-                        tile.baseColorIdx = (distToBoundary > -toothReach && toothSeed < 0.25) ? C1 : C2;
-                    } else {
-                        tile.baseColorIdx = (distToBoundary < toothReach && toothSeed < 0.25) ? C2 : C1;
-                    }
-                } else if (s.algorithm === 'bayer') {
-                    const bayerVal = BAYER_4X4[Math.abs(tile.row) % 4][Math.abs(tile.col) % 4];
-                    const rawGradient = Math.max(0, Math.min(1, 0.5 + distToBoundary / (transSpan * 1.05)));
-                    tile.baseColorIdx = (rawGradient > bayerVal) ? C1 : C2;
-                } else if (s.algorithm === 'glitch') {
-                    const rowGlitch = hash2D(tile.row * 97, 13, seed);
-                    const isGlitchRow = rowGlitch > 0.76;
-                    const shiftOffset = isGlitchRow ? (hash2D(tile.row, 71, seed) - 0.5) * 0.55 * transSpan : 0;
-                    const effectiveDist = distToBoundary + shiftOffset;
-                    tile.baseColorIdx = (effectiveDist > 0) ? C1 : C2;
-                } else if (s.algorithm === 'cellular') {
-                    const clusterNoise = smoothNoise(tile.x * 0.18, tile.y * 0.18, seed + 42);
-                    const effectiveDist = distToBoundary + (clusterNoise - 0.5) * transSpan * 0.85;
-                    tile.baseColorIdx = (effectiveDist > 0) ? C1 : C2;
-                } else {
-                    const staticNoise = hashScatter(tile.col, tile.row, typeIdx + 37, seed);
-                    const t = Math.max(0, Math.min(1, 0.5 + distToBoundary / (transSpan * 1.05)));
-                    tile.baseColorIdx = (t + (staticNoise - 0.5) * 0.35 > 0.5) ? C1 : C2;
-                }
+                // Base color index: C1 above the boundary, C2 below, as shaped by the fade
+                tile.baseColorIdx = fade.assign(tile, { dist: distToBoundary, transSpan, typeIdx, seed }, fade.params);
 
                 // Rogue noise strictly swaps random tiles outside the transition zone
                 if (isOutsideZone && s.outlierPct > 0) {
-                    const rogueRand = hashScatter(tile.col, tile.row, typeIdx + 79, seed + 9973);
+                    const rogueRand = hashScatter(tile.col, tile.row, typeIdx + ROGUE_SALT, seed + ROGUE_SEED_OFFSET);
                     const rogueThreshold = s.outlierPct / 100.0;
                     if (rogueRand < rogueThreshold) {
                         tile.baseColorIdx = (tile.y < boundaryAboveFloor) ? C1 : C2;
@@ -1687,6 +1728,7 @@
 
             // Multi-Wall Takeoff
             document.getElementById('addWallToTakeoffBtn').addEventListener('click', saveCurrentWallToTakeoff);
+            bindSavedWallsList();
 
             // Config Modal
             document.getElementById('openConfigModalBtn').addEventListener('click', openConfigModal);
@@ -1922,11 +1964,10 @@
             const wallName = `Wall ${savedWalls.length + 1} (${state.wallWidthInches}″ × ${state.wallTotalHeightInches}″)`;
             const inv = lastInventory;
 
+            // The config reproduces the wall exactly; the counts are kept for the totals
             savedWalls.push({
                 name: wallName,
-                width: state.wallWidthInches,
-                height: state.wallTotalHeightInches,
-                tiledH: state.tiledHeightInches,
+                config: configFromState(state),
                 sheetsTotal: inv.totalSheets,
                 c1Sheets: inv.c1Sheets,
                 c2Sheets: inv.c2Sheets,
@@ -1975,7 +2016,10 @@
                             <span class="text-slate-500 block font-mono">C1: ${w.c1Sheets}+${w.extraC1} | C2: ${w.c2Sheets}+${w.extraC2} (${w.sheetsTotal} sheets${w.voidCount ? `, ${w.voidCount} voids` : ''})</span>
                             <span class="text-amber-400 text-[10px] block font-mono">Swaps: ${w.handSwaps} (${w.swapsC1} C1, ${w.swapsC2} C2)</span>
                         </div>
-                        <button onclick="removeSavedWall(${idx})" class="text-rose-400 hover:text-rose-300 ml-2">✕</button>
+                        <div class="flex items-center gap-2 ml-2">
+                            <button data-action="load" data-index="${idx}" class="text-cyan-400 hover:text-cyan-300" title="Load this wall">Load</button>
+                            <button data-action="remove" data-index="${idx}" class="text-rose-400 hover:text-rose-300" title="Remove from takeoff">✕</button>
+                        </div>
                     </div>
                 `;
             });
@@ -1994,43 +2038,58 @@
             list.innerHTML = html;
         }
 
-        window.removeSavedWall = function(index) {
-            savedWalls.splice(index, 1);
-            renderSavedWallsList();
-        };
+        function bindSavedWallsList() {
+            document.getElementById('savedWallsList').addEventListener('click', (e) => {
+                const btn = e.target.closest('button[data-action]');
+                if (!btn) return;
+                const index = Number(btn.dataset.index);
+                const wall = savedWalls[index];
+                if (!wall) return;
+                if (btn.dataset.action === 'remove') {
+                    savedWalls.splice(index, 1);
+                    renderSavedWallsList();
+                } else if (btn.dataset.action === 'load') {
+                    // Saved by this version, so nothing is adjusted
+                    setState(stateFromConfig(wall.config, state).next);
+                }
+            });
+        }
 
         // --- Config JSON ---
 
-        function generateConfigJSON() {
-            const config = {
+        function configFromState(s) {
+            return {
                 version: CONFIG_VERSION,
                 physicalWallInches: {
-                    width: state.wallWidthInches,
-                    totalHeight: state.wallTotalHeightInches,
-                    tiledHeight: state.tiledHeightInches
+                    width: s.wallWidthInches,
+                    totalHeight: s.wallTotalHeightInches,
+                    tiledHeight: s.tiledHeightInches
                 },
                 colors: {
-                    color1: state.colorTile1, // top
-                    color2: state.colorTile2, // bottom
-                    paintedWall: state.colorPaint,
-                    grout: state.colorGrout
+                    color1: s.colorTile1, // top
+                    color2: s.colorTile2, // bottom
+                    paintedWall: s.colorPaint,
+                    grout: s.colorGrout
                 },
                 // Color 1 (top) gets 100 − color2Percent − transitionPercent
                 tiledSubZones: {
-                    color2Percent: state.floorPercent,
-                    transitionPercent: state.transPercent
+                    color2Percent: s.floorPercent,
+                    transitionPercent: s.transPercent
                 },
                 algorithm: {
-                    type: state.algorithm,
-                    outlierScatterPercent: state.outlierPct,
-                    seed: state.seed
+                    type: s.algorithm,
+                    outlierScatterPercent: s.outlierPct,
+                    seed: s.seed
                 },
                 // Keys are `${col}_f${tierAboveFloor}_${type}`, values 0 (C1, top) or 1 (C2, bottom)
-                manualOverrides: state.manualOverrides,
+                manualOverrides: { ...s.manualOverrides },
                 // Inches from the floor at the left wall edge; (x, y) is the bottom-left corner
-                voids: state.voids.map(v => ({ x: v.x, y: v.y, width: v.w, height: v.h }))
+                voids: s.voids.map(v => ({ x: v.x, y: v.y, width: v.w, height: v.h }))
             };
-            return JSON.stringify(config, null, 2);
+        }
+
+        function generateConfigJSON() {
+            return JSON.stringify(configFromState(state), null, 2);
         }
 
         // Maps the fields present in a parsed config onto a state patch. Absent fields keep
@@ -2102,21 +2161,9 @@
             setTimeout(() => { configStatusMsg.textContent = ''; }, 2500);
         }
 
-        function applyConfigJson() {
-            let parsed;
-            try {
-                parsed = JSON.parse(configJsonTextarea.value);
-            } catch (err) {
-                configStatusMsg.textContent = 'Error parsing JSON: ' + err.message;
-                configStatusMsg.className = 'text-xs font-mono text-rose-400';
-                return;
-            }
-            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-                configStatusMsg.textContent = 'Config must be a JSON object.';
-                configStatusMsg.className = 'text-xs font-mono text-rose-400';
-                return;
-            }
-
+        // Turns a parsed config object into the next state, listing every field that was
+        // rejected, clamped, dropped or trimmed.
+        function stateFromConfig(parsed, base) {
             const warnings = [];
             const declared = (parsed.version === undefined) ? 1 : Number(parsed.version);
             let version = Math.floor(declared);
@@ -2127,7 +2174,7 @@
 
             // Report every field that was rejected or clamped
             const patch = configToPatch(parsed, version);
-            const next = normalizeState({ ...state, ...patch }, state);
+            const next = normalizeState({ ...base, ...patch }, base);
             for (const [key, value] of Object.entries(patch)) {
                 const given = (typeof value === 'string') ? value.trim().toLowerCase() : value;
                 if (String(next[key]) !== String(given)) {
@@ -2157,7 +2204,25 @@
             }
             const dropped = Object.keys(rawOverrides).length - Object.keys(next.manualOverrides).length;
             if (dropped > 0) warnings.push(`${dropped} manual override(s) dropped`);
+            return { next, warnings };
+        }
 
+        function applyConfigJson() {
+            let parsed;
+            try {
+                parsed = JSON.parse(configJsonTextarea.value);
+            } catch (err) {
+                configStatusMsg.textContent = 'Error parsing JSON: ' + err.message;
+                configStatusMsg.className = 'text-xs font-mono text-rose-400';
+                return;
+            }
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                configStatusMsg.textContent = 'Config must be a JSON object.';
+                configStatusMsg.className = 'text-xs font-mono text-rose-400';
+                return;
+            }
+
+            const { next, warnings } = stateFromConfig(parsed, state);
             setState(next);
 
             if (warnings.length) {
@@ -2191,6 +2256,7 @@
         }
         watchPixelRatio();
         window.addEventListener('DOMContentLoaded', () => {
+            algorithmSelect.replaceChildren(...Object.entries(FADES).map(([id, f]) => new Option(f.label, id)));
             bindInputs();
             syncControls();
             scheduleRender();
