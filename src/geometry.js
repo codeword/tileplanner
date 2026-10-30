@@ -2,8 +2,8 @@
 import { CUBE_DX_INCHES, CUBE_DY_INCHES, CUBE_STEP_X_INCHES, LEFT_OFFSET_INCHES, SHEET_DRAWN_HEIGHT_INCHES, SHEET_WIDTH_INCHES, TIER_STEP_INCHES } from './constants.js';
 
 // Tile rows are numbered from the top tile line down, so a row index shifts whenever the
-// tiled height changes. Overrides, row parity and the pattern hashes use the tier counted
-// up from the floor instead (negative below the floor line).
+// tiled height changes. Overrides and the pattern hashes use the tier counted up from the
+// floor instead (negative below the floor line). Row stagger comes from the sheet.
 export function floorRowIndex(globalRow, tiledHeightInches) {
     const cubeCenterAboveFloor = tiledHeightInches - (globalRow * TIER_STEP_INCHES + CUBE_DY_INCHES);
     return Math.round(cubeCenterAboveFloor / TIER_STEP_INCHES);
@@ -106,9 +106,9 @@ export function buildSheetGrid(s) {
 
                 for (let localC = 0; localC < 3; localC++) {
                     const col = sCol * 3 + localC;
-                    // Even tiers (counted up from the floor) offset right by dx, so the layout
-                    // near the floor doesn't shift sideways when the tiled height changes
-                    const rowOffset = (floorRow % 2 === 0) ? CUBE_DX_INCHES : 0;
+                    // The stagger is fixed by the sheet: its 1st and 3rd rows (from the top)
+                    // sit half a cube right of its 2nd and 4th
+                    const rowOffset = (localR % 2 === 0) ? CUBE_DX_INCHES : 0;
                     const cx = left + (localC * CUBE_STEP_X_INCHES) + rowOffset + CUBE_DX_INCHES;
 
                     for (const rhomb of cubeRhombi(cx, cy)) {

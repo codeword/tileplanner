@@ -41,12 +41,12 @@ The pipeline modules (`noise`, `fades`, `geometry`, `inventory`, `view`, `config
 ## State model (done: refactor step 1)
 - One `state` object, defaults only in `DEFAULTS`, ranges in `LIMITS`. All changes go through `setState(patch)` → `normalizeState` (clamps, validates, caps tiled height at total height) → `syncControls()` → `scheduleRender()`. HTML controls carry no default values.
 - Tiles carry `baseColorIdx` / `colorIdx`: constants `C1 = 0` (top color) and `C2 = 1` (bottom color). Hex is looked up from `palette` only when drawing. Sheet outlines: orange = C1 majority, blue = C2.
-- `manualOverrides` maps `${col}_f${tierAboveFloor}_${type}` → 0|1. The tier is counted up from the floor (`floorRowIndex`), so flips stay put when the tiled height changes. The pattern hashes and row parity use `floorRow` too (since the bug 2–4 fixes); `row` (from the top) is only the layout loop index.
+- `manualOverrides` maps `${col}_f${tierAboveFloor}_${type}` → 0|1. The tier is counted up from the floor (`floorRowIndex`), so flips stay put when the tiled height changes. The pattern hashes use `floorRow` too (since the bug 2–4 fixes); `row` (from the top) is only the layout loop index. Row stagger is fixed per sheet: rows 1 and 3 of each sheet (from the top) sit half a cube (`CUBE_DX_INCHES`, 1.75″) right of rows 2 and 4.
 - Config JSON is now `version: 5` (v3 made `colors.color1` = top, `tiledSubZones.color2Percent` = bottom band). In v1/v2, color1 and `color1Percent` were the bottom color; those are mapped on import, v2 override indices are flipped, and v1 hex/row-from-top overrides are converted. Rejected or clamped fields are listed in the modal instead of being applied silently.
 
 ## Render pipeline (done: refactor step 2)
 `renderTiling()` runs `buildSheetGrid(state)` → `assignColors(grid, state)` → `computeInventory(grid)` → `computeView(state, viewport, dpr)` → `renderCanvas(ctx, view, grid, inventory, state)` → `renderDashboard(inventory)`, and keeps `lastGrid` / `lastInventory` / `lastView`.
-- Geometry is in **wall inches**: origin at the floor line on the left wall edge, y up. Tiles have `x`, `y` (center), `points`, `col`, `row` (from the top), `floorRow` (used by parity and the pattern hashes), `overrideKey`.
+- Geometry is in **wall inches**: origin at the floor line on the left wall edge, y up. Tiles have `x`, `y` (center), `points`, `col`, `row` (from the top), `floorRow` (used by the pattern hashes), `overrideKey`.
 - `view` maps inches to CSS px (`scale`, `originX/Y`, the snapped wall rect) plus `dpr`. Use `toScreen(view, x, y)` / `toWall(view, sx, sy)`. `renderCanvas` draws tiles and sheet outlines through one wall-space transform, and text and wall lines in CSS px. Both include `dpr`.
 - The canvas backing store is sized by `devicePixelRatio` and re-renders when it changes. PNG export re-renders off-screen at 4× (longest side capped at 8192 px).
 - `window.planner` exposes `state`, `lastGrid`, `lastInventory`, `lastView`, `nav`, `setState`, `render` (runs `renderTiling` synchronously; handy when the page is hidden and `requestAnimationFrame` is paused).
@@ -64,7 +64,7 @@ The pipeline modules (`noise`, `fades`, `geometry`, `inventory`, `view`, `config
 1. ~~The Sheet Overlay `<button>` wraps a checkbox~~ (fixed: it's a `<label>` now).
 2. ~~`hash2D` float multiply~~ (fixed: `Math.imul`).
 3. ~~Sheet row count used 12.13″~~ (fixed: rows = ceil(tiled height / `SHEET_DRAWN_HEIGHT_INCHES`); e.g. a 48.5″ tiled height used to leave a ~0.002″ untiled sliver at the floor). `SHEET_HEIGHT_INCHES` is kept only as the published size.
-4. ~~Row parity counted from the top~~ (fixed: parity, and every pattern hash, use `floorRow`; Bayer uses `mod()` so it continues below the floor). Raising the tiled height by any number of tiers no longer moves or recolors tiles near the floor.
+4. ~~Row parity counted from the top~~ (fixed: every pattern hash uses `floorRow`; Bayer uses `mod()` so it continues below the floor). Raising the tiled height no longer recolors tiles near the floor. Row stagger was briefly tied to `floorRow` too, but that put the wrong row of a sheet on the right for some tiled heights; it's per sheet again (top row right), so an odd change in tiers does shift the floor area half a cube sideways, as it would on the real wall.
 
 Fixes 2–4 changed the pattern for every seed (config `version: 5`; older configs load their settings unchanged but render the new pattern). Pattern comparisons start from this version.
 
