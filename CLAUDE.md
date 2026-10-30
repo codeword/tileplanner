@@ -1,6 +1,33 @@
 # Merola Metro Rhombus Tile Planner
 
-Single-file web app (`tile-planner.html`) for planning a tile wall built from Merola Tile "Metro Rhombus" mosaic sheets (tumbling-blocks / isometric cube pattern).
+Web app for planning a tile wall built from Merola Tile "Metro Rhombus" mosaic sheets (tumbling-blocks / isometric cube pattern). Source is ES modules in `src/`; `tile-planner.html` is a single-file build of them that opens by double-click.
+
+## Working on it
+- **Edit `src/`, never `tile-planner.html`.** After changing `src/`, run `python3 build.py` (stdlib only, no Node needed) and commit both.
+- Develop by serving the repo (`python3 -m http.server`) and opening `/src/index.html`. Module files don't load from `file://`; the built file does, because its code is one inline `<script type="module">`.
+- `build.py` concatenates modules in dependency order into one scope (drops imports, strips `export`). It fails on duplicate top-level names across modules and on names used from another module without an import (those work in the bundle but break `src/`). Only `export function|const|let|class` and `import { a, b } from './x.js'` are supported.
+
+## Layout (`src/`)
+| Module | Contents |
+|---|---|
+| `constants.js` | Sheet geometry, layout, navigation, takeoff constants, `CONFIG_VERSION` |
+| `noise.js` | `hashScatter`, `hash2D`, `smoothNoise`, `mod` |
+| `fades.js` | `FADES` registry, `BOUNDARY_OCTAVES`, `getNormalizedZones`, `assignColors` |
+| `geometry.js` | `floorRowIndex`, `overrideKey`, wall/void clipping, `buildSheetGrid`, `markCutTiles`, `isPointInPolygon` |
+| `inventory.js` | `computeInventory` |
+| `state.js` | `DEFAULTS`, `LIMITS`, `normalizeState`, voids/overrides sanitizing, `state`, `setState`, `onStateChange` |
+| `view.js` | `computeView`, `toScreen`, `toWall` |
+| `renderer.js` | `renderCanvas`, `drawSpecCard`, label helpers |
+| `config.js` | `configFromState`, `stateFromConfig` (pure; any version → state + warnings) |
+| `app.js` | Render loop (`scheduleRender`, `renderTiling`, `last*`, `nav`), PNG export |
+| `ui/canvases.js` | Plan and HUD canvases |
+| `ui/controls.js` | `syncControls`, `bindInputs`, void list |
+| `ui/pointer.js` | Click/drag/pan/zoom, cursor HUD |
+| `ui/takeoff.js` | Dashboard bar, saved walls |
+| `ui/config-modal.js` | Config JSON modal |
+| `main.js` | Wires `onStateChange(syncControls)` and `onStateChange(scheduleRender)`, binds inputs, `window.planner` |
+
+The pipeline modules (`noise`, `fades`, `geometry`, `inventory`, `view`, `config`, `renderer`) don't touch the DOM or app state; `state.js` only depends on `fades` (for the algorithm list) and `geometry`. `app.js` ↔ `ui/pointer.js` and `app.js` ↔ `ui/takeoff.js` import each other, which is fine because neither uses the other at load time.
 
 ## What it does
 - Sheet model: 10.5″ W × 12.13″ H, 3 cubes × 4 rows = 36 rhombus tiles per sheet, 10 sheets per box.
@@ -22,7 +49,7 @@ Single-file web app (`tile-planner.html`) for planning a tile wall built from Me
 - Geometry is in **wall inches**: origin at the floor line on the left wall edge, y up. Tiles have `x`, `y` (center), `points`, `col`, `row` (from the top), `floorRow` (used by parity and the pattern hashes), `overrideKey`.
 - `view` maps inches to CSS px (`scale`, `originX/Y`, the snapped wall rect) plus `dpr`. Use `toScreen(view, x, y)` / `toWall(view, sx, sy)`. `renderCanvas` draws tiles and sheet outlines through one wall-space transform, and text and wall lines in CSS px. Both include `dpr`.
 - The canvas backing store is sized by `devicePixelRatio` and re-renders when it changes. PNG export re-renders off-screen at 4× (longest side capped at 8192 px).
-- `window.planner` exposes `state`, `lastGrid`, `lastInventory`, `lastView`, `nav`, `setState`.
+- `window.planner` exposes `state`, `lastGrid`, `lastInventory`, `lastView`, `nav`, `setState`, `render` (runs `renderTiling` synchronously; handy when the page is hidden and `requestAnimationFrame` is paused).
 
 ## Navigation and pointer (done: plan step 3)
 - The page is pinned to the window height (`h-screen`); the sidebar scrolls on its own. `#tileCanvas` fills `#canvasArea`, and `#hudCanvas` sits on top of it (pointer-events none).
@@ -47,7 +74,7 @@ Fixes 2–4 changed the pattern for every seed (config `version: 5`; older confi
 3. ~~Pipeline of pure functions~~ (done)
 4. ~~Work in inches with one canvas transform~~ (done). Deriving the sheet height from tile geometry is deferred (known bug 3).
 5. ~~**Fade algorithm registry**~~ (done). `FADES = { id: { label, params, assign(tile, ctx, params) } }`; `ctx` = `{ dist, transSpan, typeIdx, seed }`, returns C1/C2. `ALGORITHMS` and the `<select>` options come from it. The boundary octaves are `BOUNDARY_OCTAVES`; rogue noise uses `ROGUE_SALT` / `ROGUE_SEED_OFFSET`. Hash salts stay inline in each fade (they only decorrelate streams).
-6. Split into ES modules: constants, noise, geometry, fades/*, inventory, state, config, renderer, ui/controls, ui/takeoff.
+6. ~~Split into ES modules~~ (done; see Layout). `setState` no longer calls the UI directly: listeners registered with `onStateChange` run in order.
 7. ~~Saved walls~~ (done): each stores `config: configFromState(state)` plus its counts, and has Load and ✕ buttons handled by one delegated listener (`bindSavedWallsList`). Import is split into `stateFromConfig(parsed, base)` → `{ next, warnings }` (pure) and `applyConfigJson` (modal). Saved walls still live in memory only.
 
 Constraint: for the same seed and settings, the refactored version should render the identical pattern, so before/after can be compared.
@@ -99,6 +126,6 @@ From a feature audit written with Gemini, rebuilt on the state model. All coordi
 3. ~~Interaction foundation: pointer handling, zoom/pan, cursor HUD~~ (done)
 4. ~~Voids, cut tiles, sheet culling, takeoff math, spec card, clean PNG~~ (done). Output changed on purpose, so later refactors compare against this version.
 5. Autosave/URL sharing, undo (covers voids), debug overlay, confirm before Re-Seed.
-6. Fade registry, module split, per-sheet swap map.
+6. ~~Fade registry, module split~~ (done); per-sheet swap map still to do.
 
 Why features wait until after steps 2–3: they change output on purpose, which ends the before/after pattern check the refactors rely on. They also depend on the inches transform and the pipeline stages.

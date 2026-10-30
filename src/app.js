@@ -1,0 +1,93 @@
+// Render loop: runs the pipeline when state changes, redraws on pan/zoom/resize, PNG export.
+import { EXPORT_MAX_PIXELS, EXPORT_PIXEL_DENSITY } from './constants.js';
+import { assignColors } from './fades.js';
+import { buildSheetGrid, markCutTiles } from './geometry.js';
+import { computeInventory } from './inventory.js';
+import { renderCanvas } from './renderer.js';
+import { state } from './state.js';
+import { canvas, canvasArea, hudCanvas, tileCtx, zoomLabel } from './ui/canvases.js';
+import { drawHud } from './ui/pointer.js';
+import { renderDashboard } from './ui/takeoff.js';
+import { computeView } from './view.js';
+
+// Render Loop
+let animationFrameId = null;
+export function scheduleRender() {
+    if (animationFrameId) cancelAnimationFrame(animationFrameId);
+    animationFrameId = requestAnimationFrame(renderTiling);
+}
+
+// Last pipeline outputs, kept for hit-testing, export, saved walls and debugging
+let lastState = null;
+export let lastGrid = null;
+export let lastInventory = null;
+export let lastView = null;
+export let lastArea = null;
+
+// Zoom/pan of the on-screen view. Pan is in CSS px from the centered position.
+export const nav = { zoom: 1, panX: 0, panY: 0 };
+
+export function renderTiling() {
+    // Grid, colors and inventory only depend on state; pan/zoom/resize reuse them
+    if (state !== lastState) {
+        lastGrid = buildSheetGrid(state);
+        markCutTiles(lastGrid, state);
+        assignColors(lastGrid, state);
+        lastInventory = computeInventory(lastGrid);
+        lastState = state;
+        renderDashboard(lastInventory);
+    }
+
+    const dpr = window.devicePixelRatio || 1;
+    lastArea = { width: canvasArea.clientWidth, height: canvasArea.clientHeight };
+    lastView = computeView(state, lastArea, dpr, nav);
+
+    for (const c of [canvas, hudCanvas]) {
+        c.width = Math.round(lastView.cssWidth * dpr);
+        c.height = Math.round(lastView.cssHeight * dpr);
+    }
+
+    renderCanvas(tileCtx, lastView, lastGrid, lastInventory, state);
+    zoomLabel.textContent = Math.round(nav.zoom * 100) + '%';
+    drawHud();
+}
+
+// --- Export Canvas as High-Res PNG ---
+// Re-renders the current view off-screen at a higher pixel density instead of copying the
+// on-screen canvas.
+// It always covers the whole plan at the fitted scale, whatever the current zoom and pan.
+export function downloadCanvasPNG() {
+    if (!lastGrid) return;
+    const fitted = computeView(state, lastArea, 1);
+    const longestSide = Math.max(fitted.cssWidth, fitted.cssHeight);
+    const view = computeView(state, lastArea, Math.min(EXPORT_PIXEL_DENSITY, EXPORT_MAX_PIXELS / longestSide));
+
+    const exportCanvas = document.createElement('canvas');
+    exportCanvas.width = Math.round(view.cssWidth * view.dpr);
+    exportCanvas.height = Math.round(view.cssHeight * view.dpr);
+    renderCanvas(exportCanvas.getContext('2d'), view, lastGrid, lastInventory, state);
+
+    exportCanvas.toBlob((blob) => {
+        if (!blob) {
+            console.error('Error generating PNG: canvas could not be encoded');
+            return;
+        }
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.download = `tile-installation-plan-${state.wallWidthInches}x${state.wallTotalHeightInches}-seed${state.seed}.png`;
+        link.href = url;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 0);
+    }, 'image/png');
+}
+
+// Re-render when the window moves to a screen with a different pixel density
+export function watchPixelRatio() {
+    const query = matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
+    query.addEventListener('change', () => {
+        scheduleRender();
+        watchPixelRatio();
+    }, { once: true });
+}
