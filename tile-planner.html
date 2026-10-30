@@ -137,8 +137,8 @@
                         <div class="flex items-center gap-2.5">
                             <input type="color" id="colorTile1">
                             <div>
-                                <div class="text-xs font-medium text-slate-200">Color 1 (Tile 1)</div>
-                                <div id="hexTile1" class="text-[10px] font-mono text-slate-500 uppercase">#121316</div>
+                                <div class="text-xs font-medium text-slate-200">Color 1 (Top)</div>
+                                <div id="hexTile1" class="text-[10px] font-mono text-slate-500 uppercase"></div>
                             </div>
                         </div>
                         <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-amber-950/80 text-amber-400 border border-amber-800/50">C1 (Orange)</span>
@@ -149,8 +149,8 @@
                         <div class="flex items-center gap-2.5">
                             <input type="color" id="colorTile2">
                             <div>
-                                <div class="text-xs font-medium text-slate-200">Color 2 (Tile 2)</div>
-                                <div id="hexTile2" class="text-[10px] font-mono text-slate-500 uppercase">#FFFFFF</div>
+                                <div class="text-xs font-medium text-slate-200">Color 2 (Bottom)</div>
+                                <div id="hexTile2" class="text-[10px] font-mono text-slate-500 uppercase"></div>
                             </div>
                         </div>
                         <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-cyan-950/80 text-cyan-400 border border-cyan-800/50">C2 (Blue)</span>
@@ -162,7 +162,7 @@
                             <input type="color" id="colorPaint">
                             <div>
                                 <div class="text-xs font-medium text-slate-200">Painted Wall (Drywall)</div>
-                                <div id="hexPaint" class="text-[10px] font-mono text-slate-500 uppercase">#B3FAFF</div>
+                                <div id="hexPaint" class="text-[10px] font-mono text-slate-500 uppercase"></div>
                             </div>
                         </div>
                         <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-cyan-950/70 text-cyan-400 border border-cyan-800/40">Upper Wall</span>
@@ -174,7 +174,7 @@
                             <input type="color" id="colorGrout">
                             <div>
                                 <div class="text-xs font-medium text-slate-200">Grout Seam Color</div>
-                                <div id="hexGrout" class="text-[10px] font-mono text-slate-500 uppercase">#333333</div>
+                                <div id="hexGrout" class="text-[10px] font-mono text-slate-500 uppercase"></div>
                             </div>
                         </div>
                         <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400">1/8″ joint</span>
@@ -189,24 +189,38 @@
                     <span class="text-[11px] font-mono text-cyan-400 font-medium">Sum: 100%</span>
                 </div>
 
-                <!-- Live Sub-Zone Bar -->
+                <!-- Live Sub-Zone Bar (left to right = top of the tiled area to the floor) -->
                 <div class="h-3 w-full bg-slate-950 rounded-full flex overflow-hidden border border-slate-800">
-                    <div id="barFloor" style="width: 83%;" class="bg-indigo-600 transition-all duration-150" title="Color 1 Base"></div>
-                    <div id="barTrans" style="width: 6%;" class="bg-amber-500 transition-all duration-150" title="Transition Fade"></div>
-                    <div id="barWall" style="width: 11%;" class="bg-slate-300 transition-all duration-150" title="Color 2 Base"></div>
+                    <div id="barC1" class="bg-indigo-600 transition-all duration-150" title="Color 1 Base (top)"></div>
+                    <div id="barTrans" class="bg-amber-500 transition-all duration-150" title="Transition Fade"></div>
+                    <div id="barC2" class="bg-slate-300 transition-all duration-150" title="Color 2 Base (bottom)"></div>
                 </div>
 
                 <div class="space-y-3 pt-2">
-                    <!-- Color 1 % -->
+                    <!-- Color 1 % (Derived, top) -->
                     <div>
                         <div class="flex justify-between text-xs mb-1">
                             <span class="text-slate-300 flex items-center gap-1.5">
                                 <span class="w-2 h-2 rounded-full bg-indigo-500 inline-block"></span>
-                                Solid Color 1
+                                Solid Color 1 (Top)
                             </span>
-                            <span id="floorPctVal" class="font-mono text-indigo-400 font-semibold">83%</span>
+                            <span id="c1PctVal" class="font-mono text-indigo-400 font-semibold"></span>
                         </div>
-                        <input type="range" id="sliderFloor" min="0" max="95" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer">
+                        <div class="text-[11px] text-slate-500 font-mono">
+                            Automatically derived: 100% − Color 2% − Trans%
+                        </div>
+                    </div>
+
+                    <!-- Color 2 % (bottom) -->
+                    <div>
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="text-slate-300 flex items-center gap-1.5">
+                                <span class="w-2 h-2 rounded-full bg-slate-300 inline-block"></span>
+                                Solid Color 2 (Bottom)
+                            </span>
+                            <span id="c2PctVal" class="font-mono text-slate-300 font-semibold"></span>
+                        </div>
+                        <input type="range" id="sliderC2" min="0" max="95" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer">
                     </div>
 
                     <!-- Transition % -->
@@ -216,23 +230,19 @@
                                 <span class="w-2 h-2 rounded-full bg-amber-500 inline-block"></span>
                                 Transition Zone Width
                             </span>
-                            <span id="transPctVal" class="font-mono text-amber-400 font-semibold">6%</span>
+                            <span id="transPctVal" class="font-mono text-amber-400 font-semibold"></span>
                         </div>
                         <input type="range" id="sliderTrans" min="2" max="60" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer">
                     </div>
 
-                    <!-- Color 2 % (Derived) -->
-                    <div>
+                    <!-- Rogue Noise % (not part of the 100% split) -->
+                    <div class="pt-3 border-t border-slate-800">
                         <div class="flex justify-between text-xs mb-1">
-                            <span class="text-slate-300 flex items-center gap-1.5">
-                                <span class="w-2 h-2 rounded-full bg-slate-300 inline-block"></span>
-                                Solid Color 2
-                            </span>
-                            <span id="wallPctVal" class="font-mono text-slate-300 font-semibold">11%</span>
+                            <span class="text-slate-300">Rogue Noise Outside Zone</span>
+                            <span id="outlierVal" class="font-mono text-cyan-400 font-semibold"></span>
                         </div>
-                        <div class="text-[11px] text-slate-500 font-mono">
-                            Automatically derived: 100% − Color 1% − Trans%
-                        </div>
+                        <input type="range" id="sliderOutlier" min="0" max="25" step="0.5" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer">
+                        <p class="text-[11px] text-slate-500 mt-1">Stochastically scatters rogue contrasting pixels deep into the Color 1 and Color 2 fields.</p>
                     </div>
                 </div>
             </div>
@@ -250,15 +260,6 @@
                         <option value="glitch">Glitch Displacement Scanlines</option>
                         <option value="blueNoise">High-Frequency Blue Noise Dissolve</option>
                     </select>
-                </div>
-
-                <div>
-                    <div class="flex justify-between text-xs mb-1">
-                        <span class="text-slate-400">Rogue Noise Outside Zone</span>
-                        <span id="outlierVal" class="font-mono text-cyan-400 font-semibold">6.5%</span>
-                    </div>
-                    <input type="range" id="sliderOutlier" min="0" max="25" step="0.5" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer">
-                    <p class="text-[11px] text-slate-500 mt-1">Stochastically scatters rogue contrasting pixels deep into the Color 1 and Color 2 fields.</p>
                 </div>
             </div>
 
@@ -399,6 +400,10 @@
         const SHEET_DRAWN_HEIGHT_INCHES = 4 * TIER_STEP_INCHES;
         const TYPE_INDEX = { top: 1, left: 2, right: 3 };
 
+        // Color indices on tiles: C1 is the top band's color, C2 the bottom (floor) band's
+        const C1 = 0;
+        const C2 = 1;
+
         // Layout
         const MARGIN_INCHES = 6.0;
         const LEFT_OFFSET_INCHES = 1.875; // 1 tile + grout offset to envelope left wall edge
@@ -412,7 +417,8 @@
         const WASTE_FACTOR = 1.10;
 
         const ALGORITHMS = ['lightning', 'bayer', 'cellular', 'glitch', 'blueNoise'];
-        const CONFIG_VERSION = 2;
+        // v3: color1/C1 is the top color (v1/v2 had color1 at the bottom)
+        const CONFIG_VERSION = 3;
 
         // --- Core Application State ---
         // Single source of truth for defaults. Controls are filled from state by syncControls().
@@ -421,20 +427,20 @@
             wallTotalHeightInches: 108,
             tiledHeightInches: 66,
 
-            floorPercent: 83,
+            floorPercent: 83,   // bottom band (Color 2); Color 1's top band is derived
             transPercent: 6,
 
             outlierPct: 6.5,
             algorithm: 'lightning',
             seed: 42891,
 
-            colorTile1: '#121316',
-            colorTile2: '#ffffff',
+            colorTile1: '#ffffff', // top
+            colorTile2: '#121316', // bottom
             colorPaint: '#b3faff',
             colorGrout: '#333333',
 
             showSheetOverlay: true,
-            // Keyed by overrideKey(); value is the color index (0 = C1, 1 = C2)
+            // Keyed by overrideKey(); value is the color index (C1 = 0 top, C2 = 1 bottom)
             manualOverrides: Object.freeze({})
         });
 
@@ -515,15 +521,15 @@
         const tiledHeightVal = document.getElementById('tiledHeightVal');
         const paintSpanLabel = document.getElementById('paintSpanLabel');
 
-        const sliderFloor = document.getElementById('sliderFloor');
+        const sliderC2 = document.getElementById('sliderC2');
         const sliderTrans = document.getElementById('sliderTrans');
-        const floorPctVal = document.getElementById('floorPctVal');
+        const c2PctVal = document.getElementById('c2PctVal');
         const transPctVal = document.getElementById('transPctVal');
-        const wallPctVal = document.getElementById('wallPctVal');
+        const c1PctVal = document.getElementById('c1PctVal');
 
-        const barFloor = document.getElementById('barFloor');
+        const barC2 = document.getElementById('barC2');
         const barTrans = document.getElementById('barTrans');
-        const barWall = document.getElementById('barWall');
+        const barC1 = document.getElementById('barC1');
 
         const sliderOutlier = document.getElementById('sliderOutlier');
         const outlierVal = document.getElementById('outlierVal');
@@ -611,7 +617,7 @@
             sliderTiledHeight.max = s.wallTotalHeightInches;
             setValue(sliderTiledHeight, s.tiledHeightInches);
 
-            setValue(sliderFloor, s.floorPercent);
+            setValue(sliderC2, s.floorPercent);
             setValue(sliderTrans, s.transPercent);
             setValue(sliderOutlier, s.outlierPct);
             outlierVal.textContent = s.outlierPct.toFixed(1) + '%';
@@ -629,13 +635,13 @@
             showSheetOverlayCheck.checked = s.showSheetOverlay;
 
             const zones = getNormalizedZones();
-            floorPctVal.textContent = Math.round(zones.floorPct) + '%';
+            c2PctVal.textContent = Math.round(zones.floorPct) + '%';
             transPctVal.textContent = Math.round(zones.transPct) + '%';
-            wallPctVal.textContent = Math.round(zones.wallPct) + '%';
+            c1PctVal.textContent = Math.round(zones.wallPct) + '%';
 
-            barFloor.style.width = zones.floorPct + '%';
+            barC2.style.width = zones.floorPct + '%';
             barTrans.style.width = zones.transPct + '%';
-            barWall.style.width = zones.wallPct + '%';
+            barC1.style.width = zones.wallPct + '%';
 
             tiledHeightVal.textContent = s.tiledHeightInches + '″';
             const paintH = Math.max(0, s.wallTotalHeightInches - s.tiledHeightInches);
@@ -785,7 +791,7 @@
         }
 
         // --- Pipeline stage 2: color assignment ---
-        // Sets tile.baseColorIdx (procedural) and tile.colorIdx (after manual overrides); 0 = C1, 1 = C2.
+        // Sets tile.baseColorIdx (procedural) and tile.colorIdx (after manual overrides).
         function assignColors(grid, s) {
             const zones = getNormalizedZones(s);
             const seed = s.seed;
@@ -813,34 +819,34 @@
 
                 const typeIdx = TYPE_INDEX[tile.type];
 
-                // Base color index selection: 0 = C1, 1 = C2
+                // Base color index selection: C1 above the boundary, C2 below
                 if (s.algorithm === 'lightning') {
                     const toothSeed = hashScatter(tile.col, tile.row, typeIdx + 11, seed);
                     const toothReach = transSpan * 0.48;
 
                     if (distToBoundary < 0) {
-                        tile.baseColorIdx = (distToBoundary > -toothReach && toothSeed < 0.25) ? 1 : 0;
+                        tile.baseColorIdx = (distToBoundary > -toothReach && toothSeed < 0.25) ? C1 : C2;
                     } else {
-                        tile.baseColorIdx = (distToBoundary < toothReach && toothSeed < 0.25) ? 0 : 1;
+                        tile.baseColorIdx = (distToBoundary < toothReach && toothSeed < 0.25) ? C2 : C1;
                     }
                 } else if (s.algorithm === 'bayer') {
                     const bayerVal = BAYER_4X4[Math.abs(tile.row) % 4][Math.abs(tile.col) % 4];
                     const rawGradient = Math.max(0, Math.min(1, 0.5 + distToBoundary / (transSpan * 1.05)));
-                    tile.baseColorIdx = (rawGradient > bayerVal) ? 1 : 0;
+                    tile.baseColorIdx = (rawGradient > bayerVal) ? C1 : C2;
                 } else if (s.algorithm === 'glitch') {
                     const rowGlitch = hash2D(tile.row * 97, 13, seed);
                     const isGlitchRow = rowGlitch > 0.76;
                     const shiftOffset = isGlitchRow ? (hash2D(tile.row, 71, seed) - 0.5) * 0.55 * transSpan : 0;
                     const effectiveDist = distToBoundary + shiftOffset;
-                    tile.baseColorIdx = (effectiveDist > 0) ? 1 : 0;
+                    tile.baseColorIdx = (effectiveDist > 0) ? C1 : C2;
                 } else if (s.algorithm === 'cellular') {
                     const clusterNoise = smoothNoise(tile.x * 0.18, tile.y * 0.18, seed + 42);
                     const effectiveDist = distToBoundary + (clusterNoise - 0.5) * transSpan * 0.85;
-                    tile.baseColorIdx = (effectiveDist > 0) ? 1 : 0;
+                    tile.baseColorIdx = (effectiveDist > 0) ? C1 : C2;
                 } else {
                     const staticNoise = hashScatter(tile.col, tile.row, typeIdx + 37, seed);
                     const t = Math.max(0, Math.min(1, 0.5 + distToBoundary / (transSpan * 1.05)));
-                    tile.baseColorIdx = (t + (staticNoise - 0.5) * 0.35 > 0.5) ? 1 : 0;
+                    tile.baseColorIdx = (t + (staticNoise - 0.5) * 0.35 > 0.5) ? C1 : C2;
                 }
 
                 // Rogue noise strictly swaps random tiles outside the transition zone
@@ -848,7 +854,7 @@
                     const rogueRand = hashScatter(tile.col, tile.row, typeIdx + 79, seed + 9973);
                     const rogueThreshold = s.outlierPct / 100.0;
                     if (rogueRand < rogueThreshold) {
-                        tile.baseColorIdx = (tile.y < boundaryAboveFloor) ? 1 : 0;
+                        tile.baseColorIdx = (tile.y < boundaryAboveFloor) ? C1 : C2;
                     }
                 }
 
@@ -871,25 +877,25 @@
                 let c1Count = 0;
                 let c2Count = 0;
                 for (const t of sheet.tiles) {
-                    if (t.colorIdx === 0) c1Count++;
+                    if (t.colorIdx === C1) c1Count++;
                     else c2Count++;
                 }
 
-                // Default to C1 if equal (18/18)
-                if (c1Count >= c2Count) {
-                    c1Sheets++;
-                    handSwaps += c2Count;
-                    swappedC2 += c2Count;
-                    sheet.majorityIdx = 0;
-                    sheet.minorityIdx = 1;
-                    sheet.minorityCount = c2Count;
-                } else {
+                // Ties (18/18) go to the bottom color, C2
+                if (c2Count >= c1Count) {
                     c2Sheets++;
                     handSwaps += c1Count;
                     swappedC1 += c1Count;
-                    sheet.majorityIdx = 1;
-                    sheet.minorityIdx = 0;
+                    sheet.majorityIdx = C2;
+                    sheet.minorityIdx = C1;
                     sheet.minorityCount = c1Count;
+                } else {
+                    c1Sheets++;
+                    handSwaps += c2Count;
+                    swappedC2 += c2Count;
+                    sheet.majorityIdx = C1;
+                    sheet.minorityIdx = C2;
+                    sheet.minorityCount = c2Count;
                 }
                 sheet.isMixed = (c1Count > 0 && c2Count > 0);
             }
@@ -1009,7 +1015,7 @@
                     }
 
                     // Orange outline for Color 1 base; Blue outline for Color 2 base
-                    const isC1 = (sheet.majorityIdx === 0);
+                    const isC1 = (sheet.majorityIdx === C1);
 
                     // Draw the interlocking perimeter (edges used by only one tile)
                     ctx.save();
@@ -1137,7 +1143,7 @@
                 ctx.beginPath();
                 ctx.arc(cardX + 210, cardY + 54, 6, 0, Math.PI * 2);
                 ctx.fill();
-                ctx.strokeStyle = '#000000';
+                ctx.strokeStyle = '#ffffff';
                 ctx.lineWidth = 1;
                 ctx.stroke();
 
@@ -1212,7 +1218,7 @@
             bindNumber(sliderTiledHeight, 'tiledHeightInches');
 
             // Sub-Zones
-            bindNumber(sliderFloor, 'floorPercent');
+            bindNumber(sliderC2, 'floorPercent');
             bindNumber(sliderTrans, 'transPercent');
             bindNumber(sliderOutlier, 'outlierPct');
 
@@ -1368,13 +1374,14 @@
                     tiledHeight: state.tiledHeightInches
                 },
                 colors: {
-                    color1: state.colorTile1,
-                    color2: state.colorTile2,
+                    color1: state.colorTile1, // top
+                    color2: state.colorTile2, // bottom
                     paintedWall: state.colorPaint,
                     grout: state.colorGrout
                 },
+                // Color 1 (top) gets 100 − color2Percent − transitionPercent
                 tiledSubZones: {
-                    color1Percent: state.floorPercent,
+                    color2Percent: state.floorPercent,
                     transitionPercent: state.transPercent
                 },
                 algorithm: {
@@ -1382,7 +1389,7 @@
                     outlierScatterPercent: state.outlierPct,
                     seed: state.seed
                 },
-                // Keys are `${col}_f${tierAboveFloor}_${type}`, values 0 (C1) or 1 (C2)
+                // Keys are `${col}_f${tierAboveFloor}_${type}`, values 0 (C1, top) or 1 (C2, bottom)
                 manualOverrides: state.manualOverrides
             };
             return JSON.stringify(config, null, 2);
@@ -1390,7 +1397,9 @@
 
         // Maps the fields present in a parsed config onto a state patch. Absent fields keep
         // their current value; validation and clamping happen in normalizeState.
-        function configToPatch(parsed) {
+        // Before v3, color1 and its percent were the bottom color, so they map to Color 2.
+        function configToPatch(parsed, version) {
+            const bottomFirst = version < 3;
             const patch = {};
             const wall = parsed.physicalWallInches || {};
             if (wall.width !== undefined) patch.wallWidthInches = wall.width;
@@ -1400,14 +1409,18 @@
             const colors = parsed.colors || {};
             const color1 = colors.color1 || colors.tile1FloorBase;
             const color2 = colors.color2 || colors.tile2WallBase;
-            if (color1) patch.colorTile1 = color1;
-            if (color2) patch.colorTile2 = color2;
+            const top = bottomFirst ? color2 : color1;
+            const bottom = bottomFirst ? color1 : color2;
+            if (top) patch.colorTile1 = top;
+            if (bottom) patch.colorTile2 = bottom;
             if (colors.paintedWall) patch.colorPaint = colors.paintedWall;
             if (colors.grout) patch.colorGrout = colors.grout;
 
             const zones = parsed.tiledSubZones || {};
-            if (zones.color1Percent !== undefined) patch.floorPercent = zones.color1Percent;
-            else if (zones.floorPercent !== undefined) patch.floorPercent = zones.floorPercent;
+            const bottomPercent = bottomFirst
+                ? (zones.color1Percent !== undefined ? zones.color1Percent : zones.floorPercent)
+                : zones.color2Percent;
+            if (bottomPercent !== undefined) patch.floorPercent = bottomPercent;
             if (zones.transitionPercent !== undefined) patch.transPercent = zones.transitionPercent;
 
             const algo = parsed.algorithm || {};
@@ -1426,7 +1439,7 @@
                 const m = /^(-?\d+)_(-?\d+)_(top|left|right)$/.exec(key);
                 if (!m || typeof hex !== 'string') continue;
                 const c = hex.toLowerCase();
-                const idx = (c === s.colorTile1) ? 0 : (c === s.colorTile2) ? 1 : -1;
+                const idx = (c === s.colorTile1) ? C1 : (c === s.colorTile2) ? C2 : -1;
                 if (idx < 0) continue;
                 out[overrideKey(Number(m[1]), floorRowIndex(Number(m[2]), s.tiledHeightInches), m[3])] = idx;
             }
@@ -1467,13 +1480,15 @@
             }
 
             const warnings = [];
-            const version = (parsed.version === undefined) ? 1 : Number(parsed.version);
-            if (!(version >= 1 && version <= CONFIG_VERSION)) {
+            const declared = (parsed.version === undefined) ? 1 : Number(parsed.version);
+            let version = Math.floor(declared);
+            if (!(declared >= 1 && declared <= CONFIG_VERSION)) {
                 warnings.push(`unknown config version ${JSON.stringify(parsed.version)}, read as v${CONFIG_VERSION}`);
+                version = CONFIG_VERSION;
             }
 
             // Report every field that was rejected or clamped
-            const patch = configToPatch(parsed);
+            const patch = configToPatch(parsed, version);
             const next = normalizeState({ ...state, ...patch }, state);
             for (const [key, value] of Object.entries(patch)) {
                 const given = (typeof value === 'string') ? value.trim().toLowerCase() : value;
@@ -1483,9 +1498,15 @@
             }
 
             const rawOverrides = parsed.manualOverrides || {};
-            next.manualOverrides = (version === 1)
-                ? convertLegacyOverrides(rawOverrides, next)
-                : sanitizeOverrides(rawOverrides);
+            if (version === 1) {
+                next.manualOverrides = convertLegacyOverrides(rawOverrides, next);
+            } else {
+                next.manualOverrides = sanitizeOverrides(rawOverrides);
+                // v2 indices had 0 = bottom color; flip them to C1 = top
+                if (version === 2) {
+                    for (const key of Object.keys(next.manualOverrides)) next.manualOverrides[key] = 1 - next.manualOverrides[key];
+                }
+            }
             const dropped = Object.keys(rawOverrides).length - Object.keys(next.manualOverrides).length;
             if (dropped > 0) warnings.push(`${dropped} manual override(s) dropped`);
 

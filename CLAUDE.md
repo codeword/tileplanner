@@ -5,17 +5,17 @@ Single-file web app (`tile-planner.html`) for planning a tile wall built from Me
 ## What it does
 - Sheet model: 10.5″ W × 12.13″ H, 3 cubes × 4 rows = 36 rhombus tiles per sheet, 10 sheets per box.
 - Inputs: wall width, total height, tiled height (paint above), two tile colors, paint color, grout color.
-- Tiled area split into Color 1 (bottom) / transition / Color 2 (top) bands. The boundary wanders horizontally via 4-octave seeded noise.
+- Tiled area split into Color 1 (top) / transition / Color 2 (bottom) bands. Sidebar order: Color 1 % (derived), Color 2 % slider (`floorPercent`, the bottom band), transition slider, rogue noise slider. The boundary wanders horizontally via 4-octave seeded noise.
 - Five fade styles: lightning (jagged teeth), Bayer 4×4 dither, cellular clusters, glitch scanlines, blue-noise dissolve. Plus "rogue noise" that scatters opposite-color tiles outside the transition band.
 - Deterministic: all randomness from seeded hashes (`currentSeed`).
-- Takeoff: each sheet labeled by majority color (tie → C1). Minority tiles = hand-swaps. Box order = ceil(sheets × 1.10 / 10).
+- Takeoff: each sheet labeled by majority color (tie → C2, the bottom color). Minority tiles = hand-swaps. Box order = ceil(sheets × 1.10 / 10).
 - Extras: click a tile to flip it (manualOverrides), save multiple walls for a combined order, JSON config export/import, PNG download.
 
 ## State model (done: refactor step 1)
 - One `state` object, defaults only in `DEFAULTS`, ranges in `LIMITS`. All changes go through `setState(patch)` → `normalizeState` (clamps, validates, caps tiled height at total height) → `syncControls()` → `scheduleRender()`. HTML controls carry no default values.
-- Tiles carry `baseColorIdx` / `colorIdx` (0 = C1, 1 = C2); hex is looked up from `palette` only when drawing.
+- Tiles carry `baseColorIdx` / `colorIdx`: constants `C1 = 0` (top color) and `C2 = 1` (bottom color). Hex is looked up from `palette` only when drawing. Sheet outlines: orange = C1 majority, blue = C2.
 - `manualOverrides` maps `${col}_f${tierAboveFloor}_${type}` → 0|1. The tier is counted up from the floor (`floorRowIndex`), so flips stay put when the tiled height changes. The pattern hashes still use `row` counted from the top, to keep renders identical.
-- Config JSON has `version: 2`. Unversioned (v1) configs are still accepted; their hex/row-from-top overrides are converted. Rejected or clamped fields are listed in the modal instead of being applied silently.
+- Config JSON has `version: 3` (`colors.color1` = top, `tiledSubZones.color2Percent` = bottom band). In v1/v2, color1 and `color1Percent` were the bottom color; those are mapped on import, v2 override indices are flipped, and v1 hex/row-from-top overrides are converted. Rejected or clamped fields are listed in the modal instead of being applied silently.
 
 ## Render pipeline (done: refactor step 2)
 `renderTiling()` runs `buildSheetGrid(state)` → `assignColors(grid, state)` → `computeInventory(grid)` → `computeView(state, viewport, dpr)` → `renderCanvas(ctx, view, grid, inventory, state)` → `renderDashboard(inventory)`, and keeps `lastGrid` / `lastInventory` / `lastView`.
@@ -60,7 +60,7 @@ Came from a feature audit written with Gemini; rebuilt here on the state model, 
 **Sheets and takeoff.**
 - A sheet whose 36 tiles are all cut is omitted: not drawn, outlined, numbered or counted.
 - Any other sheet keeps its full outline and its badge centered on the whole sheet, and is counted.
-- Majority color and hand-swaps use usable tiles only (tie → C1).
+- Majority color and hand-swaps use usable tiles only (tie → C2).
 - Cut tiles on a kept sheet are spares of that sheet's majority color.
 - Swap supply per color: C1 need = swappedC1 (C1 tiles placed into C2 sheets). C1 supply = swappedC2 (C1 tiles pulled out of C1 sheets) + spare C1 tiles. Extra C1 sheets = ceil(max(0, need − supply) / 36). Mirror for C2. Add to the majority-sheet count before the 10% waste.
 - Boxes per color: ceil(colorSheets × 1.10 / 10). Dashboard and card show sheets, spares, swaps, extra sheets and boxes per color.
