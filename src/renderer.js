@@ -8,8 +8,8 @@ import { toScreen } from './view.js';
 // Tiles and sheet outlines are drawn in wall inches through one transform; text, badges and
 // wall lines are drawn in CSS px. Both include view.dpr, so the same code renders the
 // on-screen canvas and the high-res export.
-// wallName: shown on the spec card when not empty
-export function renderCanvas(ctx, view, grid, inventory, s, wallName = '') {
+// wall: { name, unsaved } of the linked saved wall for the spec card, or null
+export function renderCanvas(ctx, view, grid, inventory, s, wall = null) {
     const { scale, dpr } = view;
     const useScreenSpace = () => ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const useWallSpace = () => ctx.setTransform(dpr * scale, 0, 0, -dpr * scale, dpr * view.originX, dpr * view.originY);
@@ -175,7 +175,7 @@ export function renderCanvas(ctx, view, grid, inventory, s, wallName = '') {
     if (!clean) drawPlanningMarks(ctx, view, s);
 
     // 6. Specification & takeoff card (painted area, or the strip below the floor)
-    drawSpecCard(ctx, view.card, inventory, s, wallName);
+    drawSpecCard(ctx, view.card, inventory, s, wall);
 
     ctx.restore(); // content clip
 
@@ -289,7 +289,7 @@ export function drawPill(ctx, text, cx, cy) {
 
 // Laid out at CARD_WIDTH_PX × CARD_HEIGHT_PX and scaled down uniformly when the space
 // (card.width) is narrower, so the text never runs past the card
-function drawSpecCard(ctx, card, inv, s, wallName) {
+function drawSpecCard(ctx, card, inv, s, wall) {
     const k = Math.min(1, card.width / CARD_WIDTH_PX);
     if (k <= 0) return;
     const x = 0, y = 0, width = CARD_WIDTH_PX, height = CARD_HEIGHT_PX;
@@ -312,12 +312,19 @@ function drawSpecCard(ctx, card, inv, s, wallName) {
     ctx.font = 'bold 11px Inter, sans-serif';
     ctx.fillText('INSTALLATION SPECIFICATIONS & MATERIAL TAKEOFF', left, y + 10);
 
-    // Wall name: the saved wall this one matches, shortened with … to fit
+    // Wall name: the linked saved wall, shortened with … to fit, plus an amber " (unsaved)"
+    // when the wall has been changed since it was saved or loaded
     ctx.font = 'bold 11px JetBrains Mono, monospace';
-    ctx.fillStyle = wallName ? '#22d3ee' : '#64748b';
-    let name = wallName || 'Unsaved wall';
-    while (name.length > 1 && ctx.measureText(name).width > width - 24) name = name.slice(0, -2) + '…';
+    ctx.fillStyle = wall ? '#22d3ee' : '#64748b';
+    const tag = wall?.unsaved ? ' (unsaved)' : '';
+    const room = width - 24 - ctx.measureText(tag).width;
+    let name = wall ? wall.name : 'Unsaved wall';
+    while (name.length > 1 && ctx.measureText(name).width > room) name = name.slice(0, -2) + '…';
     ctx.fillText(name, left, y + 26);
+    if (tag) {
+        ctx.fillStyle = '#f59e0b';
+        ctx.fillText(tag, left + ctx.measureText(name).width, y + 26);
+    }
 
     ctx.font = '10px JetBrains Mono, monospace';
     ctx.fillStyle = '#94a3b8';

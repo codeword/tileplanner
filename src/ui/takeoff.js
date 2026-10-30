@@ -39,14 +39,29 @@ export function renderDashboard(inv) {
 let savedWalls = [];
 const wallCounts = new WeakMap();
 
-// The saved wall last saved or loaded. The card shows its name while the wall being
-// edited still has exactly its settings.
+// The saved wall last saved, loaded or updated. The card shows its name, marked
+// "(unsaved)" once the wall being edited differs from it; its list entry gets Update.
+// Reset, removing it and applying a config unlink it.
 let linkedWall = null;
+let linkedShownUnsaved = false; // what the list last rendered, to re-render on a flip
 
-export function currentWallName(s) {
-    if (!linkedWall || !savedWalls.includes(linkedWall)) return '';
-    const same = WALL_KEYS.every(key => JSON.stringify(s[key]) === JSON.stringify(linkedWall.settings[key]));
-    return same ? linkedWall.name : '';
+function isUnsaved(s) {
+    return !WALL_KEYS.every(key => JSON.stringify(s[key]) === JSON.stringify(linkedWall.settings[key]));
+}
+
+export function currentWall(s) {
+    if (!linkedWall || !savedWalls.includes(linkedWall)) return null;
+    return { name: linkedWall.name, unsaved: isUnsaved(s) };
+}
+
+export function unlinkWall() {
+    linkedWall = null;
+    renderSavedWallsList();
+}
+
+// State listener: re-renders the list only when the linked entry's unsaved mark flips
+export function syncSavedWallsList() {
+    if (linkedWall && isUnsaved(state) !== linkedShownUnsaved) renderSavedWallsList();
 }
 
 export function getSavedWalls() {
@@ -55,6 +70,7 @@ export function getSavedWalls() {
 
 export function setSavedWalls(walls) {
     savedWalls = walls.slice();
+    linkedWall = null;
     renderSavedWallsList();
     scheduleRender();
 }
@@ -76,10 +92,20 @@ export function saveCurrentWallToTakeoff() {
     scheduleRender();
 }
 
+// Overwrites the linked entry with the current wall, keeping its name and place
+function updateLinkedWall() {
+    const settings = wallSettings(state);
+    if (lastInventory && lastState === state) wallCounts.set(settings, lastInventory);
+    linkedWall.settings = settings;
+    renderSavedWallsList();
+    scheduleRender();
+}
+
 const escapeHtml = (text) => text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
 function renderSavedWallsList() {
     const list = document.getElementById('savedWallsList');
+    linkedShownUnsaved = Boolean(linkedWall) && isUnsaved(state);
     if (savedWalls.length === 0) {
         list.innerHTML = `<div class="text-[11px] text-slate-500 italic p-1">No additional walls saved.</div>`;
         return;
@@ -107,17 +133,20 @@ function renderSavedWallsList() {
         aggSwapsC1 += inv.swappedC1;
         aggSwapsC2 += inv.swappedC2;
 
+        const linked = (w === linkedWall);
+        const unsaved = linked && linkedShownUnsaved;
         html += `
-            <div data-wall-index="${idx}" class="flex items-center justify-between bg-slate-950 p-2 rounded border border-slate-800 text-[11px]">
+            <div data-wall-index="${idx}" class="flex items-center justify-between bg-slate-950 p-2 rounded border ${linked ? 'border-cyan-600' : 'border-slate-800'} text-[11px]">
                 <div class="flex items-start gap-2 min-w-0">
                     <span data-drag-handle class="text-slate-600 hover:text-slate-400 cursor-grab select-none leading-4 touch-none" title="Drag to reorder">⋮⋮</span>
                     <div class="min-w-0">
-                        <button type="button" data-action="rename" class="font-medium text-slate-200 hover:text-cyan-300 text-left truncate max-w-full" title="Click to rename">${escapeHtml(w.name)}</button>
+                        <button type="button" data-action="rename" class="font-medium text-slate-200 hover:text-cyan-300 text-left truncate max-w-full" title="Click to rename">${escapeHtml(w.name)}</button>${unsaved ? '<span class="text-amber-400 text-[10px] font-mono ml-1">(unsaved)</span>' : ''}
                         <span class="text-slate-500 block font-mono">C1: ${inv.c1Sheets}+${inv.extraC1} | C2: ${inv.c2Sheets}+${inv.extraC2} (${inv.totalSheets} sheets${voidCount ? `, ${voidCount} voids` : ''}${w.settings.invertColors ? ', inverted' : ''})</span>
                         <span class="text-amber-400 text-[10px] block font-mono">Swaps: ${inv.handSwaps} (${inv.swappedC1} C1, ${inv.swappedC2} C2)</span>
                     </div>
                 </div>
                 <div class="flex items-center gap-2 ml-2">
+                    ${linked ? `<button type="button" data-action="update" class="text-amber-400 hover:text-amber-300 disabled:text-slate-600 disabled:cursor-default" title="${unsaved ? 'Save the current changes into this wall' : 'No changes to save'}" ${unsaved ? '' : 'disabled'}>Update</button>` : ''}
                     <button type="button" data-action="load" class="text-cyan-400 hover:text-cyan-300" title="Load this wall">Load</button>
                     <button type="button" data-action="remove" class="text-rose-400 hover:text-rose-300" title="Remove from takeoff">✕</button>
                 </div>
@@ -217,12 +246,16 @@ export function bindSavedWallsList() {
         if (!wall) return;
         if (btn.dataset.action === 'remove') {
             savedWalls.splice(index, 1);
+            if (wall === linkedWall) linkedWall = null;
             renderSavedWallsList();
             scheduleRender();
         } else if (btn.dataset.action === 'load') {
             // Only the wall's own settings; the shared colors stay
             linkedWall = wall;
             setState(wall.settings);
+            renderSavedWallsList(); // highlight, even when the settings didn't change
+        } else if (btn.dataset.action === 'update') {
+            updateLinkedWall();
         } else if (btn.dataset.action === 'rename') {
             startRename(row, index);
         }

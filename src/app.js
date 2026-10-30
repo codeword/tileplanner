@@ -7,7 +7,7 @@ import { renderCanvas } from './renderer.js';
 import { state } from './state.js';
 import { canvas, canvasArea, hudCanvas, tileCtx, zoomLabel } from './ui/canvases.js';
 import { drawHud } from './ui/pointer.js';
-import { currentWallName, renderDashboard } from './ui/takeoff.js';
+import { currentWall, renderDashboard } from './ui/takeoff.js';
 import { computeView } from './view.js';
 
 // Render Loop
@@ -52,7 +52,7 @@ export function renderTiling() {
         c.height = Math.round(lastView.cssHeight * dpr);
     }
 
-    renderCanvas(tileCtx, lastView, lastGrid, lastInventory, state, currentWallName(state));
+    renderCanvas(tileCtx, lastView, lastGrid, lastInventory, state, currentWall(state));
     zoomLabel.textContent = Math.round(nav.zoom * 100) + '%';
     drawHud();
 }
@@ -70,7 +70,7 @@ export function downloadCanvasPNG() {
     const exportCanvas = document.createElement('canvas');
     exportCanvas.width = Math.round(view.cssWidth * view.dpr);
     exportCanvas.height = Math.round(view.cssHeight * view.dpr);
-    renderCanvas(exportCanvas.getContext('2d'), view, lastGrid, lastInventory, state, currentWallName(state));
+    renderCanvas(exportCanvas.getContext('2d'), view, lastGrid, lastInventory, state, currentWall(state));
 
     exportCanvas.toBlob((blob) => {
         if (!blob) {

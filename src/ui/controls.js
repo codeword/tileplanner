@@ -5,7 +5,7 @@ import { FADES, getNormalizedZones } from '../fades.js';
 import { DEFAULTS, VOID_SNAP_INCHES, commitVoidClip, setState, snapInches, state } from '../state.js';
 import { applyConfigJson, closeConfigModal, copyConfigJson, openConfigModal } from './config-modal.js';
 import { bindCanvasPointer, canvasCenter, deleteVoid, zoomAt } from './pointer.js';
-import { bindSavedWallsList, saveCurrentWallToTakeoff } from './takeoff.js';
+import { bindSavedWallsList, saveCurrentWallToTakeoff, unlinkWall } from './takeoff.js';
 
 const inputWidth = document.getElementById('wallWidthInches');
 const inputTotalHeight = document.getElementById('wallTotalHeightInches');
@@ -179,6 +179,7 @@ export function bindInputs() {
 }
 
 function resetDefaults() {
+    unlinkWall();
     setState({ ...DEFAULTS, manualOverrides: {} });
 }
 

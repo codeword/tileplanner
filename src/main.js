@@ -2,6 +2,7 @@
 import { lastGrid, lastInventory, lastView, nav, renderTiling, scheduleRender, watchPixelRatio } from './app.js';
 import { onStateChange, setState, state } from './state.js';
 import { bindInputs, syncControls } from './ui/controls.js';
+import { syncSavedWallsList } from './ui/takeoff.js';
 
 // --- Debugging handle ---
 window.planner = {
@@ -21,6 +22,7 @@ watchPixelRatio();
 window.addEventListener('DOMContentLoaded', () => {
     onStateChange(syncControls);
     onStateChange(scheduleRender);
+    onStateChange(syncSavedWallsList);
     bindInputs();
     syncControls();
     scheduleRender();
