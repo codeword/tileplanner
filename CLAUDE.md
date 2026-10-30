@@ -22,7 +22,15 @@ Single-file web app (`tile-planner.html`) for planning a tile wall built from Me
 - Geometry is in **wall inches**: origin at the floor line on the left wall edge, y up. Tiles have `x`, `y` (center), `points`, `col`, `row` (from the top, used by the pattern hashes), `floorRow`, `overrideKey`.
 - `view` maps inches to CSS px (`scale`, `originX/Y`, the snapped wall rect) plus `dpr`. Use `toScreen(view, x, y)` / `toWall(view, sx, sy)`. `renderCanvas` draws tiles and sheet outlines through one wall-space transform, and text and wall lines in CSS px. Both include `dpr`.
 - The canvas backing store is sized by `devicePixelRatio` and re-renders when it changes. PNG export re-renders off-screen at 4× (longest side capped at 8192 px).
-- `window.planner` exposes `state`, `lastGrid`, `lastInventory`, `lastView`, `setState`.
+- `window.planner` exposes `state`, `lastGrid`, `lastInventory`, `lastView`, `nav`, `setState`.
+
+## Navigation and pointer (done: plan step 3)
+- The page is pinned to the window height (`h-screen`); the sidebar scrolls on its own. `#tileCanvas` fills `#canvasArea`, and `#hudCanvas` sits on top of it (pointer-events none).
+- `computeView(state, area, dpr, nav)`: the fitted scale (clamped 4–18 px/in, `FIT_PADDING_PX` around) × `nav.zoom`, with the content (wall + margins) centered and then shifted by `nav.panX/panY`. Everything outside `view.content` is `CANVAS_BG`, and drawing is clipped to the content. Without `nav` (PNG export) the canvas is exactly the content at the fitted scale, so zoom/pan never affect the export.
+- `nav = { zoom, panX, panY }` is view-only (not in state or config). Zoom is 0.5–12× the fitted scale.
+- `renderTiling()` rebuilds grid/colors/inventory only when `state` changes (identity check against `lastState`); pan, zoom and resize just redraw.
+- Pointer: a press that moves < 3px (`DRAG_THRESHOLD_PX`) is a click and flips the tile under it (`flipTileAt`). Shift+drag pans. A plain drag currently does nothing; it's reserved for drawing voids. Wheel zooms around the cursor (`zoomAt` keeps that wall point fixed); trackpad pinch arrives as ctrl+wheel. Zoom buttons: −, +, Fit.
+- HUD (`drawHud`, on `#hudCanvas`): while hovering over the content and not dragging, shows `X: …″, Y: …″` (wall inches, `formatInches`, 1 decimal) next to the cursor, flipped away from canvas edges, with dashed guides to the floor line and the left wall edge.
 - Verifying refactors: compare against the previous version, scenario by scenario, on tile pattern (sheet, col/row/type, color index, center to 1e-5″) and takeoff numbers, which must match exactly. The step-2 transform shifts anti-aliasing on some tile edges (≤ 10/255 per channel), so exact pixel equality is no longer the bar.
 
 ## Known bugs (fix first)
@@ -65,9 +73,9 @@ Came from a feature audit written with Gemini; rebuilt here on the state model, 
 - Swap supply per color: C1 need = swappedC1 (C1 tiles placed into C2 sheets). C1 supply = swappedC2 (C1 tiles pulled out of C1 sheets) + spare C1 tiles. Extra C1 sheets = ceil(max(0, need − supply) / 36). Mirror for C2. Add to the majority-sheet count before the 10% waste.
 - Boxes per color: ceil(colorSheets × 1.10 / 10). Dashboard and card show sheets, spares, swaps, extra sheets and boxes per color.
 
-**Navigation.** Mouse wheel / pinch zooms around the cursor, Shift+drag pans, plus a Fit button. View zoom/pan is not part of the config JSON.
+**Navigation.** Done in step 3 (see above).
 
-**Cursor HUD.** While hovering (not dragging), show a badge `X: …″, Y: …″` near the cursor, kept on screen at the edges, with dashed guide lines to the floor line and the left wall.
+**Cursor HUD.** Done in step 3 (see above).
 
 **Spec card.** Same content as today plus hex codes next to the C1/C2 swatches and the new per-color takeoff numbers. Drawn above everything except the HUD. If the painted area is too short for it, the canvas grows a strip below the floor line and the card goes there.
 
@@ -93,7 +101,7 @@ Came from a feature audit written with Gemini; rebuilt here on the state model, 
 ## Suggested order
 1. ~~State object, color indices, clamping, stable override keys~~ (done)
 2. ~~Pipeline split, inches geometry, DPR fix, `window.planner`~~ (done)
-3. Interaction foundation: pointer handling (3px click/drag split, Shift+drag pan, wheel zoom, Fit), screen↔inch mapping, cursor HUD. At default zoom, pattern and takeoff must still match.
+3. ~~Interaction foundation: pointer handling, zoom/pan, cursor HUD~~ (done)
 4. Voids, cut-tile rendering, sheet culling, new takeoff math, spec card update, clean high-res PNG. Output changes on purpose here, so take a new snapshot baseline once it's verified.
 5. Autosave/URL sharing, undo (covers voids), debug overlay, confirm before Re-Seed.
 6. Fade registry, module split, per-sheet swap map.

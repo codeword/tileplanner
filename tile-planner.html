@@ -27,7 +27,7 @@
         input[type="range"] { accent-color: #38bdf8; }
     </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased selection:bg-cyan-500 selection:text-white">
+<body class="bg-slate-950 text-slate-100 h-screen overflow-hidden flex flex-col antialiased selection:bg-cyan-500 selection:text-white">
 
     <!-- Header Navigation -->
     <header class="border-b border-slate-800 bg-slate-900/70 backdrop-blur sticky top-0 z-40 px-6 py-3.5 flex items-center justify-between">
@@ -76,7 +76,7 @@
     </header>
 
     <!-- Main Workspace -->
-    <div class="flex-1 flex overflow-hidden">
+    <div class="flex-1 min-h-0 flex overflow-hidden">
         
         <!-- Controls Sidebar -->
         <aside class="w-96 border-r border-slate-800 bg-slate-900/50 p-5 overflow-y-auto space-y-6 text-sm flex-shrink-0">
@@ -313,9 +313,17 @@
             </div>
 
             <!-- Canvas Viewport -->
-            <div class="flex-1 overflow-auto p-6 flex items-center justify-center bg-slate-950/90 relative">
-                <div id="canvasWrapper" class="relative shadow-2xl rounded-xl border border-slate-800 bg-slate-900 overflow-hidden flex items-center justify-center">
-                    <canvas id="tileCanvas" class="block cursor-crosshair"></canvas>
+            <div id="canvasArea" class="flex-1 relative overflow-hidden bg-slate-950/90">
+                <canvas id="tileCanvas" class="absolute inset-0 w-full h-full block cursor-crosshair touch-none"></canvas>
+                <!-- Cursor HUD; never part of the PNG export -->
+                <canvas id="hudCanvas" class="absolute inset-0 w-full h-full block pointer-events-none"></canvas>
+
+                <!-- Zoom controls -->
+                <div class="absolute bottom-3 right-3 flex items-center gap-1 bg-slate-900/90 border border-slate-700 rounded-md p-1 text-xs font-mono shadow-lg">
+                    <button id="zoomOutBtn" class="w-6 h-6 rounded text-slate-300 hover:bg-slate-700" title="Zoom out">−</button>
+                    <span id="zoomLabel" class="w-12 text-center text-slate-400"></span>
+                    <button id="zoomInBtn" class="w-6 h-6 rounded text-slate-300 hover:bg-slate-700" title="Zoom in">+</button>
+                    <button id="zoomFitBtn" class="px-2 h-6 rounded text-cyan-300 hover:bg-slate-700" title="Fit the wall in view">Fit</button>
                 </div>
             </div>
 
@@ -326,7 +334,7 @@
                     <span><strong class="text-amber-400">Orange Outline:</strong> Color 1 Base Sheet</span>
                     <span><strong class="text-cyan-400">Blue Outline:</strong> Color 2 Base Sheet</span>
                 </div>
-                <div>Click any rhombus on canvas to manually flip its color</div>
+                <div>Click a tile to flip it · Shift+drag to pan · Scroll or pinch to zoom</div>
             </footer>
         </main>
     </div>
@@ -407,8 +415,16 @@
         // Layout
         const MARGIN_INCHES = 6.0;
         const LEFT_OFFSET_INCHES = 1.875; // 1 tile + grout offset to envelope left wall edge
-        const MIN_PX_PER_INCH = 4.0;
+        const MIN_PX_PER_INCH = 4.0;      // limits for the fitted (zoom 1) scale
         const MAX_PX_PER_INCH = 18.0;
+        const FIT_PADDING_PX = 24;        // space around the wall when fitted
+        const CANVAS_BG = '#0b1120';      // canvas area outside the wall + margins
+
+        // Navigation (view only, not saved in config)
+        const ZOOM_MIN = 0.5;             // relative to the fitted scale
+        const ZOOM_MAX = 12;
+        const ZOOM_STEP = 1.25;           // per +/− button press
+        const DRAG_THRESHOLD_PX = 3;      // pointer movement below this is a click
         const EXPORT_PIXEL_DENSITY = 4;   // PNG export renders at 4× CSS pixels...
         const EXPORT_MAX_PIXELS = 8192;   // ...capped so the longest side stays within this
 
@@ -513,7 +529,10 @@
         // DOM Element Cache
         const canvas = document.getElementById('tileCanvas');
         const ctx = canvas.getContext('2d');
-        const canvasWrapper = document.getElementById('canvasWrapper');
+        const canvasArea = document.getElementById('canvasArea');
+        const hudCanvas = document.getElementById('hudCanvas');
+        const hudCtx = hudCanvas.getContext('2d');
+        const zoomLabel = document.getElementById('zoomLabel');
 
         const inputWidth = document.getElementById('wallWidthInches');
         const inputTotalHeight = document.getElementById('wallTotalHeightInches');
@@ -656,32 +675,37 @@
         }
 
         // Last pipeline outputs, kept for hit-testing, export, saved walls and debugging
+        let lastState = null;
         let lastGrid = null;
         let lastInventory = null;
         let lastView = null;
+        let lastArea = null;
+
+        // Zoom/pan of the on-screen view. Pan is in CSS px from the centered position.
+        const nav = { zoom: 1, panX: 0, panY: 0 };
 
         function renderTiling() {
-            const grid = buildSheetGrid(state);
-            assignColors(grid, state);
-            const inventory = computeInventory(grid);
+            // Grid, colors and inventory only depend on state; pan/zoom/resize reuse them
+            if (state !== lastState) {
+                lastGrid = buildSheetGrid(state);
+                assignColors(lastGrid, state);
+                lastInventory = computeInventory(lastGrid);
+                lastState = state;
+                renderDashboard(lastInventory);
+            }
 
-            const view = computeView(
-                state,
-                canvasWrapper.parentElement.clientWidth - 48,
-                canvasWrapper.parentElement.clientHeight - 48,
-                window.devicePixelRatio || 1
-            );
-            canvas.width = Math.round(view.cssWidth * view.dpr);
-            canvas.height = Math.round(view.cssHeight * view.dpr);
-            canvas.style.width = view.cssWidth + 'px';
-            canvas.style.height = view.cssHeight + 'px';
+            const dpr = window.devicePixelRatio || 1;
+            lastArea = { width: canvasArea.clientWidth, height: canvasArea.clientHeight };
+            lastView = computeView(state, lastArea, dpr, nav);
 
-            renderCanvas(ctx, view, grid, inventory, state);
-            renderDashboard(inventory);
+            for (const c of [canvas, hudCanvas]) {
+                c.width = Math.round(lastView.cssWidth * dpr);
+                c.height = Math.round(lastView.cssHeight * dpr);
+            }
 
-            lastGrid = grid;
-            lastInventory = inventory;
-            lastView = view;
+            renderCanvas(ctx, lastView, lastGrid, lastInventory, state);
+            zoomLabel.textContent = Math.round(nav.zoom * 100) + '%';
+            drawHud();
         }
 
         // --- Pipeline stage 1: sheet grid ---
@@ -916,29 +940,46 @@
         }
 
         // --- Pipeline stage 4: view (inches → CSS px) ---
-        // Fits the wall plus margins into the viewport. The wall rectangle is snapped to whole
-        // CSS pixels so its edges stay crisp; the wall origin sits on the snapped floor/left corner.
-        function computeView(s, maxDisplayWidth, maxDisplayHeight, dpr) {
+        // The fitted scale fits the wall plus margins (the "content") into `area`. With `nav`, the
+        // canvas is the whole area and the content is centered, then zoomed and panned. Without
+        // `nav` (PNG export), the canvas is exactly the content at the fitted scale.
+        // The wall rectangle is snapped to whole CSS pixels so its edges stay crisp; the wall
+        // origin sits on the snapped floor/left corner.
+        function computeView(s, area, dpr, nav = null) {
             const boundingWidthInches = s.wallWidthInches + LEFT_OFFSET_INCHES + (MARGIN_INCHES * 2);
             const boundingHeightInches = s.wallTotalHeightInches + (MARGIN_INCHES * 2);
 
-            let scale = Math.min(maxDisplayWidth / boundingWidthInches, maxDisplayHeight / boundingHeightInches);
-            scale = Math.max(MIN_PX_PER_INCH, Math.min(MAX_PX_PER_INCH, scale));
+            let fitScale = Math.min(
+                (area.width - FIT_PADDING_PX * 2) / boundingWidthInches,
+                (area.height - FIT_PADDING_PX * 2) / boundingHeightInches
+            );
+            fitScale = Math.max(MIN_PX_PER_INCH, Math.min(MAX_PX_PER_INCH, fitScale));
+            const scale = fitScale * (nav ? nav.zoom : 1);
 
-            const wallLeftX = Math.round((MARGIN_INCHES + LEFT_OFFSET_INCHES) * scale);
-            const wallFloorY = Math.round((MARGIN_INCHES + s.wallTotalHeightInches) * scale);
+            const contentWidth = Math.round(boundingWidthInches * scale);
+            const contentHeight = Math.round(boundingHeightInches * scale);
+            const cssWidth = nav ? area.width : contentWidth;
+            const cssHeight = nav ? area.height : contentHeight;
+            const contentX = nav ? Math.round((cssWidth - contentWidth) / 2 + nav.panX) : 0;
+            const contentY = nav ? Math.round((cssHeight - contentHeight) / 2 + nav.panY) : 0;
+
+            const wallLeftX = contentX + Math.round((MARGIN_INCHES + LEFT_OFFSET_INCHES) * scale);
+            const wallFloorY = contentY + Math.round((MARGIN_INCHES + s.wallTotalHeightInches) * scale);
 
             return {
                 scale,      // CSS px per inch
+                fitScale,
+                onScreen: Boolean(nav),
                 dpr,        // device px per CSS px
-                cssWidth: Math.round(boundingWidthInches * scale),
-                cssHeight: Math.round(boundingHeightInches * scale),
+                cssWidth,
+                cssHeight,
+                content: { x: contentX, y: contentY, width: contentWidth, height: contentHeight },
                 originX: wallLeftX,
                 originY: wallFloorY,
                 wallLeftX,
                 wallRightX: Math.round(wallLeftX + (s.wallWidthInches * scale)),
                 wallFloorY,
-                wallCeilingY: Math.round(MARGIN_INCHES * scale),
+                wallCeilingY: contentY + Math.round(MARGIN_INCHES * scale),
                 tiledTopY: wallFloorY - (s.tiledHeightInches * scale)
             };
         }
@@ -967,9 +1008,18 @@
 
             useScreenSpace();
 
-            // 1. Fill entire canvas background with painted wall color
-            ctx.fillStyle = s.colorPaint;
+            // 0. Canvas area outside the content (only visible on screen when zoomed out or panned)
+            const { content } = view;
+            ctx.fillStyle = CANVAS_BG;
             ctx.fillRect(0, 0, view.cssWidth, view.cssHeight);
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(content.x, content.y, content.width, content.height);
+            ctx.clip(); // tiles overhanging past the margins stay hidden, as before
+
+            // 1. Fill the content (wall + margins) with painted wall color
+            ctx.fillStyle = s.colorPaint;
+            ctx.fillRect(content.x, content.y, content.width, content.height);
 
             // 2. Draw wall drywall fill
             ctx.fillStyle = s.colorPaint;
@@ -1157,6 +1207,88 @@
 
                 ctx.restore();
             }
+
+            ctx.restore(); // content clip
+
+            // Content border, on screen only: it separates the plan from the canvas background
+            if (view.onScreen) {
+                ctx.strokeStyle = '#1e293b';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(content.x + 0.5, content.y + 0.5, content.width - 1, content.height - 1);
+            }
+        }
+
+        // --- Cursor HUD (overlay canvas) ---
+        // Shows the wall coordinate under the cursor, with guide lines to the floor line and the
+        // left wall edge. Hidden while dragging and when the cursor is off the plan.
+        let hoverPoint = null; // CSS px within the canvas, or null
+
+        function formatInches(v) {
+            const rounded = Math.round(v * 10) / 10;
+            return (Object.is(rounded, -0) ? 0 : rounded).toFixed(1) + '″';
+        }
+
+        function drawHud() {
+            if (!lastView) return;
+            const view = lastView;
+            const dpr = view.dpr;
+            hudCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            hudCtx.clearRect(0, 0, view.cssWidth, view.cssHeight);
+
+            const c = view.content;
+            if (!hoverPoint || (pointerDrag && pointerDrag.dragging)) return;
+            const { x: sx, y: sy } = hoverPoint;
+            if (sx < c.x || sx > c.x + c.width || sy < c.y || sy > c.y + c.height) return;
+
+            const pt = toWall(view, sx, sy);
+
+            // Guide lines to the floor line and the left wall edge
+            hudCtx.save();
+            hudCtx.strokeStyle = 'rgba(34, 211, 238, 0.85)';
+            hudCtx.lineWidth = 1;
+            hudCtx.setLineDash([4, 4]);
+            hudCtx.beginPath();
+            hudCtx.moveTo(Math.round(sx) + 0.5, sy);
+            hudCtx.lineTo(Math.round(sx) + 0.5, view.originY);
+            hudCtx.moveTo(sx, Math.round(sy) + 0.5);
+            hudCtx.lineTo(view.originX, Math.round(sy) + 0.5);
+            hudCtx.stroke();
+            hudCtx.restore();
+
+            // Badge next to the cursor, flipped to the other side near the canvas edges
+            const label = `X: ${formatInches(pt.x)}, Y: ${formatInches(pt.y)}`;
+            hudCtx.font = '600 11px JetBrains Mono, monospace';
+            const w = Math.ceil(hudCtx.measureText(label).width) + 14;
+            const h = 22;
+            const gap = 14;
+            let bx = sx + gap;
+            let by = sy + gap;
+            if (bx + w > view.cssWidth - 4) bx = sx - gap - w;
+            if (by + h > view.cssHeight - 4) by = sy - gap - h;
+            bx = Math.max(4, bx);
+            by = Math.max(4, by);
+
+            hudCtx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+            hudCtx.beginPath();
+            hudCtx.roundRect(bx, by, w, h, 4);
+            hudCtx.fill();
+            hudCtx.strokeStyle = 'rgba(34, 211, 238, 0.7)';
+            hudCtx.lineWidth = 1;
+            hudCtx.stroke();
+
+            hudCtx.fillStyle = '#e0f2fe';
+            hudCtx.textAlign = 'left';
+            hudCtx.textBaseline = 'middle';
+            hudCtx.fillText(label, bx + 7, by + h / 2);
+        }
+
+        let hudFrameId = null;
+        function scheduleHud() {
+            if (hudFrameId) return;
+            hudFrameId = requestAnimationFrame(() => {
+                hudFrameId = null;
+                drawHud();
+            });
         }
 
         // --- Pipeline stage 6: takeoff dashboard bar ---
@@ -1173,10 +1305,12 @@
         // --- Export Canvas as High-Res PNG ---
         // Re-renders the current view off-screen at a higher pixel density instead of copying the
         // on-screen canvas.
+        // It always covers the whole plan at the fitted scale, whatever the current zoom and pan.
         function downloadCanvasPNG() {
             if (!lastGrid) return;
-            const longestSide = Math.max(lastView.cssWidth, lastView.cssHeight);
-            const view = { ...lastView, dpr: Math.min(EXPORT_PIXEL_DENSITY, EXPORT_MAX_PIXELS / longestSide) };
+            const fitted = computeView(state, lastArea, 1);
+            const longestSide = Math.max(fitted.cssWidth, fitted.cssHeight);
+            const view = computeView(state, lastArea, Math.min(EXPORT_PIXEL_DENSITY, EXPORT_MAX_PIXELS / longestSide));
 
             const exportCanvas = document.createElement('canvas');
             exportCanvas.width = Math.round(view.cssWidth * view.dpr);
@@ -1244,22 +1378,13 @@
             // Download PNG
             document.getElementById('downloadPngBtn').addEventListener('click', downloadCanvasPNG);
 
-            // Canvas Manual Tile Flip
-            canvas.addEventListener('click', (e) => {
-                if (!lastGrid) return;
-                const rect = canvas.getBoundingClientRect();
-                const pt = toWall(lastView, e.clientX - rect.left, e.clientY - rect.top);
-
-                const tiles = lastGrid.tiles;
-                for (let i = tiles.length - 1; i >= 0; i--) {
-                    const tile = tiles[i];
-                    if (isPointInPolygon(pt, tile.points)) {
-                        setState({
-                            manualOverrides: { ...state.manualOverrides, [tile.overrideKey]: 1 - tile.colorIdx }
-                        });
-                        break;
-                    }
-                }
+            // Canvas pointer: click flips a tile, Shift+drag pans, wheel/pinch zooms
+            bindCanvasPointer();
+            document.getElementById('zoomInBtn').addEventListener('click', () => zoomAt(canvasCenter(), nav.zoom * ZOOM_STEP));
+            document.getElementById('zoomOutBtn').addEventListener('click', () => zoomAt(canvasCenter(), nav.zoom / ZOOM_STEP));
+            document.getElementById('zoomFitBtn').addEventListener('click', () => {
+                Object.assign(nav, { zoom: 1, panX: 0, panY: 0 });
+                scheduleRender();
             });
 
             // Multi-Wall Takeoff
@@ -1275,6 +1400,102 @@
 
         function resetDefaults() {
             setState({ ...DEFAULTS, manualOverrides: {} });
+        }
+
+        // --- Canvas pointer & navigation ---
+        // A press that moves less than DRAG_THRESHOLD_PX is a click (flips the tile under it).
+        // Shift+drag pans. A plain drag is reserved for drawing voids.
+        let pointerDrag = null; // { id, startX, startY, lastX, lastY, pan, dragging }
+
+        function canvasPoint(e) {
+            const rect = canvas.getBoundingClientRect();
+            return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        }
+
+        function canvasCenter() {
+            return { x: canvas.clientWidth / 2, y: canvas.clientHeight / 2 };
+        }
+
+        function flipTileAt(screenPt) {
+            if (!lastGrid) return;
+            const pt = toWall(lastView, screenPt.x, screenPt.y);
+            const tiles = lastGrid.tiles;
+            for (let i = tiles.length - 1; i >= 0; i--) {
+                const tile = tiles[i];
+                if (isPointInPolygon(pt, tile.points)) {
+                    setState({
+                        manualOverrides: { ...state.manualOverrides, [tile.overrideKey]: 1 - tile.colorIdx }
+                    });
+                    return;
+                }
+            }
+        }
+
+        // Zoom to `zoom` keeping the wall point under `screenPt` fixed
+        function zoomAt(screenPt, zoom) {
+            if (!lastView) return;
+            const anchor = toWall(lastView, screenPt.x, screenPt.y);
+            nav.zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoom));
+            const next = computeView(state, lastArea, lastView.dpr, nav);
+            const moved = toScreen(next, anchor.x, anchor.y);
+            nav.panX += screenPt.x - moved.x;
+            nav.panY += screenPt.y - moved.y;
+            scheduleRender();
+        }
+
+        function bindCanvasPointer() {
+            canvas.addEventListener('pointerdown', (e) => {
+                if (e.button !== 0 || pointerDrag) return;
+                const p = canvasPoint(e);
+                pointerDrag = { id: e.pointerId, startX: p.x, startY: p.y, lastX: p.x, lastY: p.y, pan: e.shiftKey, dragging: false };
+                try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* synthetic pointer */ }
+            });
+
+            canvas.addEventListener('pointermove', (e) => {
+                const p = canvasPoint(e);
+                hoverPoint = p;
+                const d = pointerDrag;
+                if (d && e.pointerId === d.id) {
+                    if (!d.dragging && Math.hypot(p.x - d.startX, p.y - d.startY) >= DRAG_THRESHOLD_PX) {
+                        d.dragging = true;
+                        if (d.pan) canvas.style.cursor = 'grabbing';
+                    }
+                    if (d.dragging && d.pan) {
+                        nav.panX += p.x - d.lastX;
+                        nav.panY += p.y - d.lastY;
+                        scheduleRender();
+                    }
+                    d.lastX = p.x;
+                    d.lastY = p.y;
+                }
+                scheduleHud();
+            });
+
+            const endDrag = (e, cancelled) => {
+                const d = pointerDrag;
+                if (!d || e.pointerId !== d.id) return;
+                pointerDrag = null;
+                canvas.style.cursor = '';
+                try { canvas.releasePointerCapture(e.pointerId); } catch (err) { /* synthetic pointer */ }
+                if (!cancelled && !d.dragging) flipTileAt(canvasPoint(e));
+                scheduleHud();
+            };
+            canvas.addEventListener('pointerup', (e) => endDrag(e, false));
+            canvas.addEventListener('pointercancel', (e) => endDrag(e, true));
+
+            canvas.addEventListener('pointerleave', () => {
+                if (pointerDrag) return; // captured; keep the HUD state until release
+                hoverPoint = null;
+                scheduleHud();
+            });
+
+            canvas.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                // Trackpad pinch arrives as ctrl+wheel with small deltas; Firefox may report lines
+                const deltaY = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+                const factor = Math.exp(-deltaY * (e.ctrlKey ? 0.01 : 0.0015));
+                zoomAt(canvasPoint(e), nav.zoom * factor);
+            }, { passive: false });
         }
 
         function isPointInPolygon(pt, poly) {
@@ -1526,6 +1747,7 @@
             get lastGrid() { return lastGrid; },
             get lastInventory() { return lastInventory; },
             get lastView() { return lastView; },
+            nav,
             setState
         };
 
