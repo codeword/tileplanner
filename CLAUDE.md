@@ -32,6 +32,7 @@ The pipeline modules (`noise`, `fades`, `geometry`, `inventory`, `view`, `config
 ## What it does
 - Sheet model: 10.5″ W × 12.13″ H, 3 cubes × 4 rows = 36 rhombus tiles per sheet, 10 sheets per box.
 - Inputs: wall width, total height, tiled height (paint above), two tile colors, paint color, grout color.
+- Sidebar order: Wall Dimensions (width, total height and tiled height as three number fields; Enter/blur re-shows the clamped value), Voids (fixed at two rows, 166px, always-visible scrollbar via `.void-list`), Color Specifications, Tiled Sub-Zones, Corruption Aesthetics, Saved Walls (grows with its list; the sidebar scrolls).
 - Tiled area split into Color 1 (top) / transition / Color 2 (bottom) bands. Sidebar order: Color 1 % (derived), Color 2 % slider (`floorPercent`, the bottom band), transition slider, rogue noise slider. The boundary wanders horizontally via 4-octave seeded noise.
 - Five fade styles: lightning (jagged teeth), Bayer 4×4 dither, cellular clusters, glitch scanlines, blue-noise dissolve. Plus "rogue noise" that scatters opposite-color tiles outside the transition band.
 - Deterministic: all randomness from seeded hashes (`currentSeed`).
@@ -103,6 +104,8 @@ From a feature audit written with Gemini, rebuilt on the state model. All coordi
 **Spec card** (`drawSpecCard`): wall name, wall/grid line, one row per color (swatch, hex, sheets + extra → boxes), swaps, spares and the order. It is laid out at 480×134 and scaled down uniformly to fit. The name is that of the saved wall last saved or loaded (`currentWallName` in `ui/takeoff.js`) while the wall being edited still has exactly its settings, so renaming it updates the card; otherwise the card shows a grey "Unsaved wall". `renderCanvas` takes it as its last argument, so the PNG export includes it. `computeView` places it in the painted area when that fits at the fitted scale, otherwise in a strip added below the bottom margin (`view.card`); zoom never moves it.
 
 **PNG export**: the fitted plan at 4×. No × badges, HUD or drag preview. Sheet outlines/badges only if the overlay is on.
+
+**Clean mockup (Sheet Overlay off).** `renderCanvas` drops the planning marks: sheet outlines/badges, cut-tile ghosts, the outside-wall wash, red wall lines and labels, and void outlines, labels and × badges (`drawPlanningMarks` only runs with the overlay on, so `view.voidBadges` stays empty). Usable tiles are clipped to the wall, and voids (clipped to the wall) are filled with `CANVAS_BG` over them, so tiles show how they'd be cut. The margins are `CANVAS_BG` too, and the on-screen content border is skipped. The spec card stays. The PNG export follows the toggle.
 
 **Still open (defaults chosen):** label units (now exact decimals like 36.0625″; fractions like 36 1/16″ would be a change to `formatLength` only; the HUD uses `formatInches`, 1 decimal); the exact export resolution; drag-to-paint (would need a modifier key, since plain drag draws voids).
 

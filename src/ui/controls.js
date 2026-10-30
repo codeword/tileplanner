@@ -9,8 +9,7 @@ import { bindSavedWallsList, saveCurrentWallToTakeoff } from './takeoff.js';
 
 const inputWidth = document.getElementById('wallWidthInches');
 const inputTotalHeight = document.getElementById('wallTotalHeightInches');
-const sliderTiledHeight = document.getElementById('tiledHeightInches');
-const tiledHeightVal = document.getElementById('tiledHeightVal');
+const inputTiledHeight = document.getElementById('tiledHeightInches');
 const paintSpanLabel = document.getElementById('paintSpanLabel');
 
 const sliderC2 = document.getElementById('sliderC2');
@@ -56,8 +55,8 @@ export function syncControls() {
 
     setValue(inputWidth, s.wallWidthInches);
     setValue(inputTotalHeight, s.wallTotalHeightInches);
-    sliderTiledHeight.max = s.wallTotalHeightInches;
-    setValue(sliderTiledHeight, s.tiledHeightInches);
+    inputTiledHeight.max = s.wallTotalHeightInches; // spinner stops at the wall height
+    setValue(inputTiledHeight, s.tiledHeightInches);
 
     setValue(sliderC2, s.floorPercent);
     setValue(sliderTrans, s.transPercent);
@@ -94,7 +93,6 @@ export function syncControls() {
     barTrans.style.width = zones.transPct + '%';
     barC1.style.width = zones.wallPct + '%';
 
-    tiledHeightVal.textContent = s.tiledHeightInches + '″';
     const paintH = Math.max(0, s.wallTotalHeightInches - s.tiledHeightInches);
     paintSpanLabel.textContent = `Paint above ${s.tiledHeightInches}″ (${paintH.toFixed(1)}″ un-tiled)`;
 }
@@ -111,7 +109,10 @@ export function bindInputs() {
             const v = parseFloat(el.value);
             if (Number.isFinite(v)) setState({ [key]: v });
         });
-        el.addEventListener('change', syncControls);
+        el.addEventListener('change', () => {
+            syncControls();
+            el.value = state[key]; // syncControls skips the focused field (Enter keeps focus)
+        });
     };
 
     // Wall Dimensions
@@ -121,7 +122,7 @@ export function bindInputs() {
     inputWidth.addEventListener('change', commitVoidClip);
     inputTotalHeight.addEventListener('change', commitVoidClip);
     bindVoidList();
-    bindNumber(sliderTiledHeight, 'tiledHeightInches');
+    bindNumber(inputTiledHeight, 'tiledHeightInches');
 
     // Sub-Zones
     bindNumber(sliderC2, 'floorPercent');

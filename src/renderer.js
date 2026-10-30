@@ -17,6 +17,10 @@ export function renderCanvas(ctx, view, grid, inventory, s, wallName = '') {
     const { wallLeftX, wallRightX, wallFloorY, wallCeilingY, tiledTopY } = view;
     const renderedWallWidth = wallRightX - wallLeftX;
     const renderedTotalHeight = wallFloorY - wallCeilingY;
+    // Overlay off = clean mockup: tiles cropped at the wall and void edges, voids and
+    // everything outside the wall in CANVAS_BG, and no planning marks (ghost tiles, sheet
+    // outlines, wall lines, void outlines/labels/badges). The spec card stays.
+    const clean = !s.showSheetOverlay;
 
     useScreenSpace();
 
@@ -30,7 +34,7 @@ export function renderCanvas(ctx, view, grid, inventory, s, wallName = '') {
     ctx.clip(); // tiles overhanging past the margins stay hidden, as before
 
     // 1. Fill the content (wall + margins) with painted wall color
-    ctx.fillStyle = s.colorPaint;
+    ctx.fillStyle = clean ? CANVAS_BG : s.colorPaint;
     ctx.fillRect(content.x, content.y, content.width, content.height);
 
     // 2. Draw wall drywall fill
@@ -38,11 +42,13 @@ export function renderCanvas(ctx, view, grid, inventory, s, wallName = '') {
     ctx.fillRect(wallLeftX, wallCeilingY, renderedWallWidth, renderedTotalHeight);
 
     // Light wash over everything outside the wall, so the wall edge reads clearly
-    ctx.fillStyle = OUTSIDE_WALL_WASH;
-    ctx.beginPath();
-    ctx.rect(content.x, content.y, content.width, content.height);
-    ctx.rect(wallLeftX, wallCeilingY, renderedWallWidth, renderedTotalHeight);
-    ctx.fill('evenodd');
+    if (!clean) {
+        ctx.fillStyle = OUTSIDE_WALL_WASH;
+        ctx.beginPath();
+        ctx.rect(content.x, content.y, content.width, content.height);
+        ctx.rect(wallLeftX, wallCeilingY, renderedWallWidth, renderedTotalHeight);
+        ctx.fill('evenodd');
+    }
 
     // 3. Tiles: cut tiles (fully in a void or outside the wall) are dotted outlines with
     // no fill; usable tiles are drawn on top of them
@@ -57,17 +63,26 @@ export function renderCanvas(ctx, view, grid, inventory, s, wallName = '') {
     ctx.lineJoin = 'round';
     useWallSpace();
 
-    ctx.save();
-    ctx.lineWidth = 1 / scale;
-    ctx.setLineDash([2 / scale, 2 / scale]);
-    ctx.strokeStyle = CUT_TILE_STROKE;
-    for (const tile of grid.tiles) {
-        if (!tile.cut) continue;
-        tracePath(tile);
-        ctx.stroke();
+    if (!clean) {
+        ctx.save();
+        ctx.lineWidth = 1 / scale;
+        ctx.setLineDash([2 / scale, 2 / scale]);
+        ctx.strokeStyle = CUT_TILE_STROKE;
+        for (const tile of grid.tiles) {
+            if (!tile.cut) continue;
+            tracePath(tile);
+            ctx.stroke();
+        }
+        ctx.restore();
     }
-    ctx.restore();
 
+    // In the clean mockup, tiles are cropped at the wall edge here and at the voids below
+    ctx.save();
+    if (clean) {
+        ctx.beginPath();
+        ctx.rect(0, 0, s.wallWidthInches, s.wallTotalHeightInches);
+        ctx.clip();
+    }
     ctx.lineWidth = Math.max(0.75, scale * (1.0 / 16.0)) / scale;
     ctx.strokeStyle = s.colorGrout;
     for (const tile of grid.tiles) {
@@ -76,6 +91,16 @@ export function renderCanvas(ctx, view, grid, inventory, s, wallName = '') {
         ctx.fillStyle = palette[tile.colorIdx];
         ctx.fill();
         ctx.stroke();
+    }
+    ctx.restore();
+
+    // Voids are solid, covering the tile parts inside them
+    if (clean) {
+        ctx.fillStyle = CANVAS_BG;
+        for (const stored of s.voids) {
+            const v = clipRectToWall(stored, s);
+            if (v) ctx.fillRect(v.x, v.y, v.w, v.h);
+        }
     }
 
     // 4. Sheet outlines and badges
@@ -146,6 +171,28 @@ export function renderCanvas(ctx, view, grid, inventory, s, wallName = '') {
 
     useScreenSpace();
 
+    if (!clean) drawPlanningMarks(ctx, view, s);
+
+    // 6. Specification & takeoff card (painted area, or the strip below the floor)
+    drawSpecCard(ctx, view.card, inventory, s, wallName);
+
+    ctx.restore(); // content clip
+
+    // Content border, on screen only: it separates the plan from the canvas background
+    // (the clean mockup's margins already are the canvas background)
+    if (view.onScreen && !clean) {
+        ctx.strokeStyle = '#1e293b';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(content.x + 0.5, content.y + 0.5, content.width - 1, content.height - 1);
+    }
+}
+
+// Red wall lines and labels, and void outlines, labels and × badges (screen space)
+function drawPlanningMarks(ctx, view, s) {
+    const { wallLeftX, wallRightX, wallFloorY, wallCeilingY, tiledTopY } = view;
+    const renderedWallWidth = wallRightX - wallLeftX;
+    const renderedTotalHeight = wallFloorY - wallCeilingY;
+
     // Red Dashed Lines for Exact Physical Wall Dimensions
     ctx.save();
     ctx.strokeStyle = '#ef4444';
@@ -211,18 +258,6 @@ export function renderCanvas(ctx, view, grid, inventory, s, wallName = '') {
         }
     }
     ctx.restore();
-
-    // 6. Specification & takeoff card (painted area, or the strip below the floor)
-    drawSpecCard(ctx, view.card, inventory, s, wallName);
-
-    ctx.restore(); // content clip
-
-    // Content border, on screen only: it separates the plan from the canvas background
-    if (view.onScreen) {
-        ctx.strokeStyle = '#1e293b';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(content.x + 0.5, content.y + 0.5, content.width - 1, content.height - 1);
-    }
 }
 
 // Lengths on void labels and inputs: exact to the 1/16″ snap, trailing zeros dropped
