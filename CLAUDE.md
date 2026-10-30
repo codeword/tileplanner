@@ -14,12 +14,12 @@ Single-file web app (`tile-planner.html`) for planning a tile wall built from Me
 ## State model (done: refactor step 1)
 - One `state` object, defaults only in `DEFAULTS`, ranges in `LIMITS`. All changes go through `setState(patch)` → `normalizeState` (clamps, validates, caps tiled height at total height) → `syncControls()` → `scheduleRender()`. HTML controls carry no default values.
 - Tiles carry `baseColorIdx` / `colorIdx`: constants `C1 = 0` (top color) and `C2 = 1` (bottom color). Hex is looked up from `palette` only when drawing. Sheet outlines: orange = C1 majority, blue = C2.
-- `manualOverrides` maps `${col}_f${tierAboveFloor}_${type}` → 0|1. The tier is counted up from the floor (`floorRowIndex`), so flips stay put when the tiled height changes. The pattern hashes still use `row` counted from the top, to keep renders identical.
-- Config JSON has `version: 3` (`colors.color1` = top, `tiledSubZones.color2Percent` = bottom band). In v1/v2, color1 and `color1Percent` were the bottom color; those are mapped on import, v2 override indices are flipped, and v1 hex/row-from-top overrides are converted. Rejected or clamped fields are listed in the modal instead of being applied silently.
+- `manualOverrides` maps `${col}_f${tierAboveFloor}_${type}` → 0|1. The tier is counted up from the floor (`floorRowIndex`), so flips stay put when the tiled height changes. The pattern hashes and row parity use `floorRow` too (since the bug 2–4 fixes); `row` (from the top) is only the layout loop index.
+- Config JSON is now `version: 5` (v3 made `colors.color1` = top, `tiledSubZones.color2Percent` = bottom band). In v1/v2, color1 and `color1Percent` were the bottom color; those are mapped on import, v2 override indices are flipped, and v1 hex/row-from-top overrides are converted. Rejected or clamped fields are listed in the modal instead of being applied silently.
 
 ## Render pipeline (done: refactor step 2)
 `renderTiling()` runs `buildSheetGrid(state)` → `assignColors(grid, state)` → `computeInventory(grid)` → `computeView(state, viewport, dpr)` → `renderCanvas(ctx, view, grid, inventory, state)` → `renderDashboard(inventory)`, and keeps `lastGrid` / `lastInventory` / `lastView`.
-- Geometry is in **wall inches**: origin at the floor line on the left wall edge, y up. Tiles have `x`, `y` (center), `points`, `col`, `row` (from the top, used by the pattern hashes), `floorRow`, `overrideKey`.
+- Geometry is in **wall inches**: origin at the floor line on the left wall edge, y up. Tiles have `x`, `y` (center), `points`, `col`, `row` (from the top), `floorRow` (used by parity and the pattern hashes), `overrideKey`.
 - `view` maps inches to CSS px (`scale`, `originX/Y`, the snapped wall rect) plus `dpr`. Use `toScreen(view, x, y)` / `toWall(view, sx, sy)`. `renderCanvas` draws tiles and sheet outlines through one wall-space transform, and text and wall lines in CSS px. Both include `dpr`.
 - The canvas backing store is sized by `devicePixelRatio` and re-renders when it changes. PNG export re-renders off-screen at 4× (longest side capped at 8192 px).
 - `window.planner` exposes `state`, `lastGrid`, `lastInventory`, `lastView`, `nav`, `setState`.
@@ -35,9 +35,11 @@ Single-file web app (`tile-planner.html`) for planning a tile wall built from Me
 
 ## Known bugs (fix first)
 1. ~~The Sheet Overlay `<button>` wraps a checkbox~~ (fixed: it's a `<label>` now).
-2. `hash2D` uses a float `*` instead of `Math.imul`, losing precision. Fixing it changes every pattern.
-3. Sheet row count uses `SHEET_HEIGHT_INCHES` (12.13″) while sheets are drawn `SHEET_DRAWN_HEIGHT_INCHES` (~12.124″) tall. Unifying them can change the row count for some tiled heights, so it changes output.
-4. Row parity (cube x-offset) is taken from the row counted from the top, so changing the tiled height by an odd number of tiers shifts the whole layout half a cube sideways.
+2. ~~`hash2D` float multiply~~ (fixed: `Math.imul`).
+3. ~~Sheet row count used 12.13″~~ (fixed: rows = ceil(tiled height / `SHEET_DRAWN_HEIGHT_INCHES`); e.g. a 48.5″ tiled height used to leave a ~0.002″ untiled sliver at the floor). `SHEET_HEIGHT_INCHES` is kept only as the published size.
+4. ~~Row parity counted from the top~~ (fixed: parity, and every pattern hash, use `floorRow`; Bayer uses `mod()` so it continues below the floor). Raising the tiled height by any number of tiers no longer moves or recolors tiles near the floor.
+
+Fixes 2–4 changed the pattern for every seed (config `version: 5`; older configs load their settings unchanged but render the new pattern). Pattern comparisons start from this version.
 
 ## Refactor plan (agreed direction)
 1. ~~Single state object~~ (done)
