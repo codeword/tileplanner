@@ -55,7 +55,8 @@ function wallConfigFromSettings(name, w) {
         // { sheet badge (from 0): { tile 0–35: color index shown, 0 = Color 1, 1 = Color 2 } }
         manualOverrides: overridesBySheet(w),
         // Inches from the floor at the left wall edge; (x, y) is the bottom-left corner
-        voids: w.voids.map(v => ({ x: v.x, y: v.y, width: v.w, height: v.h }))
+        // measureOnly: a measurement, tiles under it stay (v8)
+        voids: w.voids.map(v => ({ x: v.x, y: v.y, width: v.w, height: v.h, measureOnly: v.measureOnly }))
     };
 }
 
@@ -154,7 +155,7 @@ function wallFromConfig(wall, version, base) {
 
     // Voids (v4+); older configs have none. Trimmed to the imported wall right away.
     const rawVoids = Array.isArray(wall.voids) ? wall.voids : [];
-    const imported = sanitizeVoids(rawVoids.map(v => (v && typeof v === 'object') ? { x: v.x, y: v.y, w: v.width, h: v.height } : null));
+    const imported = sanitizeVoids(rawVoids.map(v => (v && typeof v === 'object') ? { x: v.x, y: v.y, w: v.width, h: v.height, measureOnly: v.measureOnly } : null));
     if (imported.length < rawVoids.length) warnings.push(`${rawVoids.length - imported.length} malformed void(s) dropped`);
     next.voids = clipVoidsToWall({ ...next, voids: imported });
     const keptById = new Map(next.voids.map(v => [v.id, v]));

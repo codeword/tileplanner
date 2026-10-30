@@ -97,7 +97,7 @@ function renderSavedWallsList() {
 
     savedWalls.forEach((w, idx) => {
         const inv = countsFor(w.settings);
-        const voidCount = w.settings.voids.length;
+        const voidCount = w.settings.voids.filter(v => !v.measureOnly).length;
         aggExtraC1 += inv.extraC1;
         aggExtraC2 += inv.extraC2;
         aggSheets += inv.totalSheets;

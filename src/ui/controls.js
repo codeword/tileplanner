@@ -188,7 +188,8 @@ function resetDefaults() {
 const VOID_FIELDS = [['w', 'W'], ['h', 'H'], ['x', 'X'], ['y', 'Y']];
 
 function syncVoidList(s, setValue) {
-    const ids = s.voids.map(v => v.id).join(',');
+    // The key includes measureOnly, so toggling it rebuilds the row's name and color
+    const ids = s.voids.map(v => v.id + (v.measureOnly ? 'm' : '')).join(',');
     if (voidList.dataset.ids !== ids) {
         voidList.dataset.ids = ids;
         if (!s.voids.length) {
@@ -198,7 +199,10 @@ function syncVoidList(s, setValue) {
             voidList.innerHTML = s.voids.map((v, i) => `
                 <div class="bg-slate-950 p-2 rounded border border-slate-800" data-void-id="${v.id}">
                     <div class="flex items-center justify-between mb-1">
-                        <span class="text-[11px] font-mono text-fuchsia-400">Void ${i + 1}</span>
+                        <span class="text-[11px] font-mono ${v.measureOnly ? 'text-amber-400' : 'text-fuchsia-400'}">${v.measureOnly ? 'Measure' : 'Void'} ${i + 1}</span>
+                        <label class="ml-auto mr-3 flex items-center gap-1 text-[10px] text-slate-400 cursor-pointer" title="Measurement only: tiles under it stay">
+                            <input type="checkbox" data-action="measure" class="accent-amber-500" ${v.measureOnly ? 'checked' : ''}> Measure only
+                        </label>
                         <button type="button" data-action="delete" class="text-rose-400 hover:text-rose-300" title="Delete void">✕</button>
                     </div>
                     <div class="grid grid-cols-4 gap-1.5">
@@ -230,6 +234,10 @@ function bindVoidList() {
     });
     voidList.addEventListener('change', (e) => {
         const t = target(e);
+        if (t && e.target.dataset.action === 'measure') {
+            setState({ voids: state.voids.map(v => v.id === t.id ? { ...v, measureOnly: e.target.checked } : v) });
+            return;
+        }
         if (!t || !t.field) return;
         const snap = (field, value) => (field === 'w' || field === 'h')
             ? Math.max(VOID_SNAP_INCHES, snapInches(value))

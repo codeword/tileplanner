@@ -153,9 +153,9 @@ export function buildSheetGrid(s) {
 const CUT_AREA_EPSILON = 1e-6; // sq in
 
 // The usable wall as disjoint rectangles: the wall split along every void edge, keeping
-// the cells that aren't inside a void. Overlapping voids just merge.
+// the cells that aren't inside a void. Overlapping voids just merge. Measurements don't cut.
 function usableCells(s) {
-    const voids = clipVoidsToWall(s);
+    const voids = clipVoidsToWall(s).filter(v => !v.measureOnly);
     const uniqueSorted = (vals) => [...new Set(vals)].sort((a, b) => a - b);
     const xs = uniqueSorted([0, s.wallWidthInches, ...voids.flatMap(v => [v.x, v.x + v.w])]);
     const ys = uniqueSorted([0, s.wallTotalHeightInches, ...voids.flatMap(v => [v.y, v.y + v.h])]);

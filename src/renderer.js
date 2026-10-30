@@ -1,5 +1,6 @@
 // Draws a plan (tiles, sheets, wall lines, voids, spec card) onto a 2D context.
-import { C1, C2, CANVAS_BG, CARD_HEIGHT_PX, CARD_WIDTH_PX, CUT_TILE_STROKE, OUTSIDE_WALL_WASH, VOID_BADGE_RADIUS_PX, VOID_STROKE } from './constants.js';
+import { C1, C2, CANVAS_BG, CARD_HEIGHT_PX, CARD_WIDTH_PX, CUT_TILE_STROKE, MEASURE_STROKE, OUTSIDE_WALL_WASH, VOID_BADGE_RADIUS_PX, VOID_STROKE } from './constants.js';
+import { FADES, getNormalizedZones } from './fades.js';
 import { clipRectToWall } from './geometry.js';
 import { toScreen } from './view.js';
 
@@ -99,7 +100,7 @@ export function renderCanvas(ctx, view, grid, inventory, s, wallName = '') {
         ctx.fillStyle = CANVAS_BG;
         for (const stored of s.voids) {
             const v = clipRectToWall(stored, s);
-            if (v) ctx.fillRect(v.x, v.y, v.w, v.h);
+            if (v && !v.measureOnly) ctx.fillRect(v.x, v.y, v.w, v.h);
         }
     }
 
@@ -234,7 +235,7 @@ function drawPlanningMarks(ctx, view, s) {
         const tl = toScreen(view, v.x, v.y + v.h);
         const br = toScreen(view, v.x + v.w, v.y);
 
-        ctx.strokeStyle = VOID_STROKE;
+        ctx.strokeStyle = v.measureOnly ? MEASURE_STROKE : VOID_STROKE;
         ctx.lineWidth = 1.5;
         ctx.setLineDash([6, 4]);
         ctx.strokeRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
@@ -322,6 +323,14 @@ function drawSpecCard(ctx, card, inv, s, wallName) {
     ctx.fillStyle = '#94a3b8';
     ctx.fillText(`WALL: ${s.wallWidthInches}″ W × ${s.wallTotalHeightInches}″ H (Tiled ${s.tiledHeightInches}″)  |  GRID: ${inv.totalSheets} Sheets (${inv.gridCols}×${inv.gridRows})`, left, y + 44);
 
+    // Fade and sub-zones: the bands as used (transition trimmed to fit), with the color
+    // that fills each (Invert puts Color 2 on top). maxWidth squeezes rare long values.
+    const zones = getNormalizedZones(s);
+    const [topC, bottomC] = s.invertColors ? ['C2', 'C1'] : ['C1', 'C2'];
+    const pct = (v) => `${+v.toFixed(1)}%`;
+    ctx.fillText(`FADE: ${FADES[s.algorithm].label}  |  SEED: ${s.seed}`, left, y + 60, width - 24);
+    ctx.fillText(`ZONES: Top ${topC} ${pct(zones.wallPct)} · Trans ${pct(zones.transPct)} · Bottom ${bottomC} ${pct(zones.floorPct)}  |  Rogue ${pct(s.outlierPct)}  |  Invert ${s.invertColors ? 'on' : 'off'}`, left, y + 76, width - 24);
+
     // One row per color: swatch, hex, sheets, extra sheets, boxes
     const colorRow = (rowY, hex, name, accent, sheets, extra, boxes) => {
         ctx.fillStyle = hex;
@@ -338,12 +347,12 @@ function drawSpecCard(ctx, card, inv, s, wallName) {
         ctx.font = '10px JetBrains Mono, monospace';
         ctx.fillText(`${sheets} sheets + ${extra} extra → ${boxes} ${boxes === 1 ? 'box' : 'boxes'}`, left + 140, rowY);
     };
-    colorRow(y + 62, s.colorTile1, 'Color 1', '#f59e0b', inv.c1Sheets, inv.extraC1, inv.boxesC1);
-    colorRow(y + 78, s.colorTile2, 'Color 2', '#38bdf8', inv.c2Sheets, inv.extraC2, inv.boxesC2);
+    colorRow(y + 94, s.colorTile1, 'Color 1', '#f59e0b', inv.c1Sheets, inv.extraC1, inv.boxesC1);
+    colorRow(y + 110, s.colorTile2, 'Color 2', '#38bdf8', inv.c2Sheets, inv.extraC2, inv.boxesC2);
 
     ctx.fillStyle = '#cbd5e1';
-    ctx.fillText(`Hand-swaps: ${inv.handSwaps} tiles (${inv.swappedC1} C1 into C2 sheets, ${inv.swappedC2} C2 into C1 sheets)`, left, y + 96);
-    ctx.fillText(`Spares from cuts: ${inv.spareC1} C1, ${inv.spareC2} C2  |  Order: ${inv.boxes} boxes (incl. 10% waste)`, left, y + 112);
+    ctx.fillText(`Hand-swaps: ${inv.handSwaps} tiles (${inv.swappedC1} C1 into C2 sheets, ${inv.swappedC2} C2 into C1 sheets)`, left, y + 128);
+    ctx.fillText(`Spares from cuts: ${inv.spareC1} C1, ${inv.spareC2} C2  |  Order: ${inv.boxes} boxes (incl. 10% waste)`, left, y + 144);
 
     ctx.restore();
 }

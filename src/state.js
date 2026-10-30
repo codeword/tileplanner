@@ -28,7 +28,7 @@ export const DEFAULTS = Object.freeze({
     // Keyed by overrideKey() (`${sRow}_${sCol}_t${n}`); value is the color shown (C1 = 0, C2 = 1)
     manualOverrides: Object.freeze({}),
     // Cutouts in wall inches: { id, x, y, w, h }, (x, y) = bottom-left corner
-    voids: Object.freeze([])
+    voids: Object.freeze([]) // + measureOnly: true for a measurement that cuts nothing
 });
 
 // [min, max] for numeric state. tiledHeightInches is further capped at wallTotalHeightInches.
@@ -52,6 +52,7 @@ export function snapInches(v) {
 }
 
 // Keeps well-formed voids (finite numbers, positive size) and gives each a unique id.
+// measureOnly voids are measurements: drawn and listed, but tiles under them stay.
 // Voids are not clipped to the wall here: that happens when an edit is committed
 // (clipVoidsToWall), so typing a smaller width doesn't destroy them mid-edit.
 export function sanitizeVoids(raw) {
@@ -64,7 +65,7 @@ export function sanitizeVoids(raw) {
         if (![x, y, w, h].every(Number.isFinite) || w <= 0 || h <= 0) continue;
         const id = (Number.isInteger(v.id) && v.id > 0 && !used.has(v.id)) ? v.id : null;
         if (id) used.add(id);
-        out.push({ id, x, y, w, h });
+        out.push({ id, x, y, w, h, measureOnly: v.measureOnly === true });
     }
     let nextId = Math.max(0, ...used) + 1;
     for (const v of out) if (v.id === null) v.id = nextId++;

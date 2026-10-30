@@ -37,12 +37,13 @@ export const CANVAS_BG = '#0b1120';      // canvas area outside the wall + margi
 export const OUTSIDE_WALL_WASH = 'rgba(100, 116, 139, 0.18)';
 export const CUT_TILE_STROKE = 'rgba(51, 65, 85, 0.75)';
 export const VOID_STROKE = '#d946ef';
+export const MEASURE_STROKE = '#f59e0b'; // measure-only voids
 export const VOID_BADGE_RADIUS_PX = 8;
 
 // Spec card (CSS px). It sits in the painted area when that fits at the fitted scale,
 // otherwise in a strip added below the bottom margin.
 export const CARD_WIDTH_PX = 480;
-export const CARD_HEIGHT_PX = 134;
+export const CARD_HEIGHT_PX = 166;
 export const CARD_MARGIN_PX = 16;
 
 // Navigation (view only, not saved in config)
@@ -64,4 +65,5 @@ export const WASTE_FACTOR = 1.10;
 // bottomPercent, and each wall has invertColors.
 // v7: manualOverrides nested { sheet badge 0…: { tile 0–35: color index } }; older keys are
 // converted on import.
-export const CONFIG_VERSION = 7;
+// v8: voids may have measureOnly: true (a measurement; tiles stay). Absent = a cutout.
+export const CONFIG_VERSION = 8;

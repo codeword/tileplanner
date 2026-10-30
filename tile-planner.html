@@ -449,12 +449,13 @@
         const OUTSIDE_WALL_WASH = 'rgba(100, 116, 139, 0.18)';
         const CUT_TILE_STROKE = 'rgba(51, 65, 85, 0.75)';
         const VOID_STROKE = '#d946ef';
+        const MEASURE_STROKE = '#f59e0b'; // measure-only voids
         const VOID_BADGE_RADIUS_PX = 8;
 
         // Spec card (CSS px). It sits in the painted area when that fits at the fitted scale,
         // otherwise in a strip added below the bottom margin.
         const CARD_WIDTH_PX = 480;
-        const CARD_HEIGHT_PX = 134;
+        const CARD_HEIGHT_PX = 166;
         const CARD_MARGIN_PX = 16;
 
         // Navigation (view only, not saved in config)
@@ -476,7 +477,8 @@
         // bottomPercent, and each wall has invertColors.
         // v7: manualOverrides nested { sheet badge 0…: { tile 0–35: color index } }; older keys are
         // converted on import.
-        const CONFIG_VERSION = 7;
+        // v8: voids may have measureOnly: true (a measurement; tiles stay). Absent = a cutout.
+        const CONFIG_VERSION = 8;
 
         // ---- src/noise.js ----
         // Seeded integer hashes and 2D value noise. All randomness in the pattern comes from here.
@@ -813,9 +815,9 @@
         const CUT_AREA_EPSILON = 1e-6; // sq in
 
         // The usable wall as disjoint rectangles: the wall split along every void edge, keeping
-        // the cells that aren't inside a void. Overlapping voids just merge.
+        // the cells that aren't inside a void. Overlapping voids just merge. Measurements don't cut.
         function usableCells(s) {
-            const voids = clipVoidsToWall(s);
+            const voids = clipVoidsToWall(s).filter(v => !v.measureOnly);
             const uniqueSorted = (vals) => [...new Set(vals)].sort((a, b) => a - b);
             const xs = uniqueSorted([0, s.wallWidthInches, ...voids.flatMap(v => [v.x, v.x + v.w])]);
             const ys = uniqueSorted([0, s.wallTotalHeightInches, ...voids.flatMap(v => [v.y, v.y + v.h])]);
@@ -1141,7 +1143,7 @@
                 ctx.fillStyle = CANVAS_BG;
                 for (const stored of s.voids) {
                     const v = clipRectToWall(stored, s);
-                    if (v) ctx.fillRect(v.x, v.y, v.w, v.h);
+                    if (v && !v.measureOnly) ctx.fillRect(v.x, v.y, v.w, v.h);
                 }
             }
 
@@ -1276,7 +1278,7 @@
                 const tl = toScreen(view, v.x, v.y + v.h);
                 const br = toScreen(view, v.x + v.w, v.y);
 
-                ctx.strokeStyle = VOID_STROKE;
+                ctx.strokeStyle = v.measureOnly ? MEASURE_STROKE : VOID_STROKE;
                 ctx.lineWidth = 1.5;
                 ctx.setLineDash([6, 4]);
                 ctx.strokeRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
@@ -1364,6 +1366,14 @@
             ctx.fillStyle = '#94a3b8';
             ctx.fillText(`WALL: ${s.wallWidthInches}″ W × ${s.wallTotalHeightInches}″ H (Tiled ${s.tiledHeightInches}″)  |  GRID: ${inv.totalSheets} Sheets (${inv.gridCols}×${inv.gridRows})`, left, y + 44);
 
+            // Fade and sub-zones: the bands as used (transition trimmed to fit), with the color
+            // that fills each (Invert puts Color 2 on top). maxWidth squeezes rare long values.
+            const zones = getNormalizedZones(s);
+            const [topC, bottomC] = s.invertColors ? ['C2', 'C1'] : ['C1', 'C2'];
+            const pct = (v) => `${+v.toFixed(1)}%`;
+            ctx.fillText(`FADE: ${FADES[s.algorithm].label}  |  SEED: ${s.seed}`, left, y + 60, width - 24);
+            ctx.fillText(`ZONES: Top ${topC} ${pct(zones.wallPct)} · Trans ${pct(zones.transPct)} · Bottom ${bottomC} ${pct(zones.floorPct)}  |  Rogue ${pct(s.outlierPct)}  |  Invert ${s.invertColors ? 'on' : 'off'}`, left, y + 76, width - 24);
+
             // One row per color: swatch, hex, sheets, extra sheets, boxes
             const colorRow = (rowY, hex, name, accent, sheets, extra, boxes) => {
                 ctx.fillStyle = hex;
@@ -1380,12 +1390,12 @@
                 ctx.font = '10px JetBrains Mono, monospace';
                 ctx.fillText(`${sheets} sheets + ${extra} extra → ${boxes} ${boxes === 1 ? 'box' : 'boxes'}`, left + 140, rowY);
             };
-            colorRow(y + 62, s.colorTile1, 'Color 1', '#f59e0b', inv.c1Sheets, inv.extraC1, inv.boxesC1);
-            colorRow(y + 78, s.colorTile2, 'Color 2', '#38bdf8', inv.c2Sheets, inv.extraC2, inv.boxesC2);
+            colorRow(y + 94, s.colorTile1, 'Color 1', '#f59e0b', inv.c1Sheets, inv.extraC1, inv.boxesC1);
+            colorRow(y + 110, s.colorTile2, 'Color 2', '#38bdf8', inv.c2Sheets, inv.extraC2, inv.boxesC2);
 
             ctx.fillStyle = '#cbd5e1';
-            ctx.fillText(`Hand-swaps: ${inv.handSwaps} tiles (${inv.swappedC1} C1 into C2 sheets, ${inv.swappedC2} C2 into C1 sheets)`, left, y + 96);
-            ctx.fillText(`Spares from cuts: ${inv.spareC1} C1, ${inv.spareC2} C2  |  Order: ${inv.boxes} boxes (incl. 10% waste)`, left, y + 112);
+            ctx.fillText(`Hand-swaps: ${inv.handSwaps} tiles (${inv.swappedC1} C1 into C2 sheets, ${inv.swappedC2} C2 into C1 sheets)`, left, y + 128);
+            ctx.fillText(`Spares from cuts: ${inv.spareC1} C1, ${inv.spareC2} C2  |  Order: ${inv.boxes} boxes (incl. 10% waste)`, left, y + 144);
 
             ctx.restore();
         }
@@ -1419,7 +1429,7 @@
             // Keyed by overrideKey() (`${sRow}_${sCol}_t${n}`); value is the color shown (C1 = 0, C2 = 1)
             manualOverrides: Object.freeze({}),
             // Cutouts in wall inches: { id, x, y, w, h }, (x, y) = bottom-left corner
-            voids: Object.freeze([])
+            voids: Object.freeze([]) // + measureOnly: true for a measurement that cuts nothing
         });
 
         // [min, max] for numeric state. tiledHeightInches is further capped at wallTotalHeightInches.
@@ -1443,6 +1453,7 @@
         }
 
         // Keeps well-formed voids (finite numbers, positive size) and gives each a unique id.
+        // measureOnly voids are measurements: drawn and listed, but tiles under them stay.
         // Voids are not clipped to the wall here: that happens when an edit is committed
         // (clipVoidsToWall), so typing a smaller width doesn't destroy them mid-edit.
         function sanitizeVoids(raw) {
@@ -1455,7 +1466,7 @@
                 if (![x, y, w, h].every(Number.isFinite) || w <= 0 || h <= 0) continue;
                 const id = (Number.isInteger(v.id) && v.id > 0 && !used.has(v.id)) ? v.id : null;
                 if (id) used.add(id);
-                out.push({ id, x, y, w, h });
+                out.push({ id, x, y, w, h, measureOnly: v.measureOnly === true });
             }
             let nextId = Math.max(0, ...used) + 1;
             for (const v of out) if (v.id === null) v.id = nextId++;
@@ -1833,7 +1844,8 @@
                 // { sheet badge (from 0): { tile 0–35: color index shown, 0 = Color 1, 1 = Color 2 } }
                 manualOverrides: overridesBySheet(w),
                 // Inches from the floor at the left wall edge; (x, y) is the bottom-left corner
-                voids: w.voids.map(v => ({ x: v.x, y: v.y, width: v.w, height: v.h }))
+                // measureOnly: a measurement, tiles under it stay (v8)
+                voids: w.voids.map(v => ({ x: v.x, y: v.y, width: v.w, height: v.h, measureOnly: v.measureOnly }))
             };
         }
 
@@ -1932,7 +1944,7 @@
 
             // Voids (v4+); older configs have none. Trimmed to the imported wall right away.
             const rawVoids = Array.isArray(wall.voids) ? wall.voids : [];
-            const imported = sanitizeVoids(rawVoids.map(v => (v && typeof v === 'object') ? { x: v.x, y: v.y, w: v.width, h: v.height } : null));
+            const imported = sanitizeVoids(rawVoids.map(v => (v && typeof v === 'object') ? { x: v.x, y: v.y, w: v.width, h: v.height, measureOnly: v.measureOnly } : null));
             if (imported.length < rawVoids.length) warnings.push(`${rawVoids.length - imported.length} malformed void(s) dropped`);
             next.voids = clipVoidsToWall({ ...next, voids: imported });
             const keptById = new Map(next.voids.map(v => [v.id, v]));
@@ -2118,7 +2130,7 @@
 
             savedWalls.forEach((w, idx) => {
                 const inv = countsFor(w.settings);
-                const voidCount = w.settings.voids.length;
+                const voidCount = w.settings.voids.filter(v => !v.measureOnly).length;
                 aggExtraC1 += inv.extraC1;
                 aggExtraC2 += inv.extraC2;
                 aggSheets += inv.totalSheets;
@@ -2578,7 +2590,8 @@
         const VOID_FIELDS = [['w', 'W'], ['h', 'H'], ['x', 'X'], ['y', 'Y']];
 
         function syncVoidList(s, setValue) {
-            const ids = s.voids.map(v => v.id).join(',');
+            // The key includes measureOnly, so toggling it rebuilds the row's name and color
+            const ids = s.voids.map(v => v.id + (v.measureOnly ? 'm' : '')).join(',');
             if (voidList.dataset.ids !== ids) {
                 voidList.dataset.ids = ids;
                 if (!s.voids.length) {
@@ -2588,7 +2601,10 @@
                     voidList.innerHTML = s.voids.map((v, i) => `
                         <div class="bg-slate-950 p-2 rounded border border-slate-800" data-void-id="${v.id}">
                             <div class="flex items-center justify-between mb-1">
-                                <span class="text-[11px] font-mono text-fuchsia-400">Void ${i + 1}</span>
+                                <span class="text-[11px] font-mono ${v.measureOnly ? 'text-amber-400' : 'text-fuchsia-400'}">${v.measureOnly ? 'Measure' : 'Void'} ${i + 1}</span>
+                                <label class="ml-auto mr-3 flex items-center gap-1 text-[10px] text-slate-400 cursor-pointer" title="Measurement only: tiles under it stay">
+                                    <input type="checkbox" data-action="measure" class="accent-amber-500" ${v.measureOnly ? 'checked' : ''}> Measure only
+                                </label>
                                 <button type="button" data-action="delete" class="text-rose-400 hover:text-rose-300" title="Delete void">✕</button>
                             </div>
                             <div class="grid grid-cols-4 gap-1.5">
@@ -2620,6 +2636,10 @@
             });
             voidList.addEventListener('change', (e) => {
                 const t = target(e);
+                if (t && e.target.dataset.action === 'measure') {
+                    setState({ voids: state.voids.map(v => v.id === t.id ? { ...v, measureOnly: e.target.checked } : v) });
+                    return;
+                }
                 if (!t || !t.field) return;
                 const snap = (field, value) => (field === 'w' || field === 'h')
                     ? Math.max(VOID_SNAP_INCHES, snapInches(value))
