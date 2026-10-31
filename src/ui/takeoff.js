@@ -58,6 +58,43 @@ export function unlinkWall() {
     renderSavedWallsList();
 }
 
+// --- Inventory view ---
+// The Inventory entry (top of the list) shows the saved-walls inventory on the main canvas
+// instead of the wall. Only Load on a saved wall leaves it (or removing the last wall). While
+// it's shown, the wall controls are disabled (syncInventoryMode).
+let inventoryShown = false;
+
+export function isInventoryShown() {
+    return inventoryShown;
+}
+
+function setInventoryShown(shown) {
+    inventoryShown = shown && savedWalls.length > 0;
+    renderSavedWallsList();
+    scheduleRender();
+}
+
+// Wall-only controls: the dimension, void and corruption-aesthetic fieldsets, Re-Seed,
+// + Save Wall and the sheet overlay toggle. Update is disabled in the list rendering.
+function syncInventoryMode() {
+    for (const id of ['wallDimensionsFieldset', 'voidsFieldset', 'aestheticFieldset']) {
+        const fs = document.getElementById(id);
+        fs.disabled = inventoryShown;
+        fs.classList.toggle('opacity-50', inventoryShown);
+    }
+    for (const id of ['randomizeSeedBtn', 'addWallToTakeoffBtn', 'showSheetOverlayCheck']) {
+        document.getElementById(id).disabled = inventoryShown;
+    }
+    document.getElementById('showSheetOverlayLabel').classList.toggle('opacity-50', inventoryShown);
+    document.getElementById('zoomControls').classList.toggle('hidden', inventoryShown);
+    // Download PNG (wall or inventory) and Export ZIP need at least one saved wall
+    for (const id of ['downloadPngBtn', 'exportWallsZipBtn']) {
+        const btn = document.getElementById(id);
+        if (btn.dataset.busy) continue; // an export is running
+        btn.disabled = savedWalls.length === 0;
+    }
+}
+
 // State listener: re-renders the list only when the linked entry's unsaved mark flips
 export function syncSavedWallsList() {
     if (linkedWall && isUnsaved(state) !== linkedShownUnsaved) renderSavedWallsList();
@@ -70,6 +107,7 @@ export function getSavedWalls() {
 export function setSavedWalls(walls) {
     savedWalls = walls.slice();
     linkedWall = null;
+    if (!savedWalls.length) inventoryShown = false;
     renderSavedWallsList();
     scheduleRender();
 }
@@ -120,18 +158,23 @@ const escapeHtml = (text) => text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0
 function renderSavedWallsList() {
     const list = document.getElementById('savedWallsList');
     linkedShownUnsaved = Boolean(linkedWall) && isUnsaved(state);
-    for (const id of ['exportWallsZipBtn', 'exportInventoryBtn']) {
-        const btn = document.getElementById(id);
-        if (btn.textContent.trim().endsWith('…')) continue; // an export is running
-        btn.disabled = savedWalls.length === 0;
-    }
+    syncInventoryMode();
     if (savedWalls.length === 0) {
         list.innerHTML = `<div class="text-[11px] text-slate-500 italic p-1">No additional walls saved.</div>`;
         return;
     }
 
-    let html = '';
     const total = pooledTakeoff();
+    const { c1, c2 } = total;
+    // Inventory entry: fixed above the walls (not draggable), with the pooled totals
+    let html = `
+        <button type="button" data-action="inventory" class="block w-full text-left bg-slate-950 p-2 rounded border ${inventoryShown ? 'border-cyan-600' : 'border-slate-800 hover:border-slate-600'} font-mono text-[11px]" title="Show the inventory on the canvas">
+            <div class="font-sans font-medium text-slate-200 flex items-center justify-between">Inventory <span class="text-[10px] text-cyan-400 font-mono">${inventoryShown ? 'shown' : 'view'}</span></div>
+            <div class="text-cyan-300">Total: ${c1.buy + c2.buy} sheets (${c1.buy} C1 + ${c2.buy} C2)</div>
+            <div class="text-slate-400">Leftover: ${c1.leftover} C1, ${c2.leftover} C2 tiles | ${total.sheetsOnWalls} sheets on walls</div>
+            <div class="text-amber-400 text-[10px]">Swaps: ${total.swappedC1 + total.swappedC2} (${total.swappedC1} C1, ${total.swappedC2} C2)</div>
+        </button>
+    `;
 
     savedWalls.forEach((w, idx) => {
         const inv = total.walls[idx].inv;
@@ -151,22 +194,13 @@ function renderSavedWallsList() {
                     </div>
                 </div>
                 <div class="flex items-center gap-2 ml-2">
-                    ${linked ? `<button type="button" data-action="update" class="text-amber-400 hover:text-amber-300 disabled:text-slate-600 disabled:cursor-default" title="${unsaved ? 'Save the current changes into this wall' : 'No changes to save'}" ${unsaved ? '' : 'disabled'}>Update</button>` : ''}
+                    ${linked ? `<button type="button" data-action="update" class="text-amber-400 hover:text-amber-300 disabled:text-slate-600 disabled:cursor-default" title="${unsaved ? 'Save the current changes into this wall' : 'No changes to save'}" ${unsaved && !inventoryShown ? '' : 'disabled'}>Update</button>` : ''}
                     <button type="button" data-action="load" class="text-cyan-400 hover:text-cyan-300" title="Load this wall">Load</button>
                     <button type="button" data-action="remove" class="text-rose-400 hover:text-rose-300" title="Remove from takeoff">✕</button>
                 </div>
             </div>
         `;
     });
-
-    const { c1, c2 } = total;
-    html += `
-        <div class="pt-2 border-t border-slate-800 font-mono text-[11px] text-cyan-300">
-            <div>Total Takeoff: ${c1.buy + c2.buy} sheets (${c1.buy} C1 + ${c2.buy} C2)</div>
-            <div class="text-slate-400">Leftover: ${c1.leftover} C1, ${c2.leftover} C2 tiles | ${total.sheetsOnWalls} sheets on walls</div>
-            <div class="text-amber-400 text-[10px]">Total Swaps: ${total.swappedC1 + total.swappedC2} (${total.swappedC1} C1, ${total.swappedC2} C2)</div>
-        </div>
-    `;
 
     list.innerHTML = html;
 }
@@ -242,6 +276,10 @@ export function bindSavedWallsList() {
     const list = document.getElementById('savedWallsList');
     list.addEventListener('click', (e) => {
         const btn = e.target.closest('button[data-action]');
+        if (btn?.dataset.action === 'inventory') {
+            setInventoryShown(true);
+            return;
+        }
         const row = e.target.closest('[data-wall-index]');
         if (!btn || !row) return;
         const index = Number(row.dataset.wallIndex);
@@ -250,13 +288,16 @@ export function bindSavedWallsList() {
         if (btn.dataset.action === 'remove') {
             savedWalls.splice(index, 1);
             if (wall === linkedWall) linkedWall = null;
+            if (!savedWalls.length) inventoryShown = false;
             renderSavedWallsList();
             scheduleRender();
         } else if (btn.dataset.action === 'load') {
             // Only the wall's own settings; the shared colors stay
             linkedWall = wall;
+            inventoryShown = false;
             setState(wall.settings);
             renderSavedWallsList(); // highlight, even when the settings didn't change
+            scheduleRender();
         } else if (btn.dataset.action === 'update') {
             updateLinkedWall();
         } else if (btn.dataset.action === 'rename') {

@@ -25,8 +25,8 @@ Web app for planning a tile wall built from Merola Tile "Metro Rhombus" mosaic s
 | `ui/canvases.js` | Plan and HUD canvases |
 | `ui/controls.js` | `syncControls`, `bindInputs`, void list |
 | `ui/pointer.js` | Click/drag/pan/zoom, cursor HUD |
-| `ui/takeoff.js` | Dashboard bar, saved walls (rename, drag reorder, `getSavedWalls` / `setSavedWalls`, `pooledTakeoff`) |
-| `ui/export.js` | Saved-walls zip export and inventory PNG download |
+| `ui/takeoff.js` | Dashboard bar, saved walls (rename, drag reorder, `getSavedWalls` / `setSavedWalls`, `pooledTakeoff`), inventory view (`isInventoryShown`, `syncInventoryMode`) |
+| `ui/export.js` | Saved-walls zip export, inventory PNG download, `inventoryColors` |
 | `ui/config-modal.js` | Config JSON modal |
 | `main.js` | Wires `onStateChange(syncControls)` and `onStateChange(scheduleRender)`, binds inputs, `window.planner` |
 
@@ -35,7 +35,8 @@ The pipeline modules (`noise`, `fades`, `geometry`, `inventory`, `inventory-imag
 ## What it does
 - Sheet model: 10.5″ W × 12.13″ H, 3 cubes × 4 rows = 36 rhombus tiles per sheet. The order is in sheets (no boxes or waste factor).
 - Inputs: wall width, total height, tiled height (paint above), two tile colors, paint color, grout color.
-- Sidebar order: Wall Dimensions (width, total height and tiled height as three number fields; Enter/blur re-shows the clamped value), Voids (fixed at two rows, 166px, always-visible scrollbar via `.void-list`), Color Specifications, Tiled Sub-Zones, Corruption Aesthetics, Saved Walls (grows with its list; the sidebar scrolls).
+- Sidebar order: Color Specifications, Wall Dimensions (width, total height and tiled height as three number fields; Enter/blur re-shows the clamped value), Voids (fixed at two rows, 166px, always-visible scrollbar via `.void-list`), Corruption Aesthetic (fade style, then the tiled sub-zones), Saved Walls (grows with its list; the sidebar scrolls). Dimensions, Voids and Corruption Aesthetic are `<fieldset>`s, so disabling one disables every input in it, including void rows added later.
+- Header: Download PNG, Export ZIP (both disabled until a wall is saved), Sheet Overlay, Config JSON, Re-Seed, Reset.
 - Tiled area split into Color 1 (top) / transition / Color 2 (bottom) bands. Sidebar order: Color 1 % (derived), Color 2 % slider (`floorPercent`, the bottom band), transition slider, rogue noise slider. The boundary wanders horizontally via 4-octave seeded noise.
 - Five fade styles: lightning (jagged teeth), Bayer 4×4 dither, cellular clusters, glitch scanlines, blue-noise dissolve. Plus "rogue noise" that scatters opposite-color tiles outside the transition band.
 - Deterministic: all randomness from seeded hashes (`currentSeed`).
@@ -109,9 +110,15 @@ From a feature audit written with Gemini, rebuilt on the state model. All coordi
 
 **PNG export**: the fitted plan at 4×. No × badges, HUD or drag preview. Sheet outlines/badges only if the overlay is on. Everything off the wall is transparent (`transparent = !view.onScreen` in `renderCanvas`: no canvas background, margin paint or wash), and in the clean mockup voids are cleared with `destination-out`. The card's own fill is 92% opaque. The file is named `<wall name>_<W>x<H>_<overlay|mockup>.png` (`exportFileName` in `app.js`): the linked saved wall's name (kept with unsaved changes) or `unsaved-wall`, made file-safe (`fileSafe`: runs of other characters → one `-`, so "Bathroom - Floor" → `Bathroom-Floor`; non-ASCII letters are dropped).
 
-**Saved-walls export** (`ui/export.js`; buttons under Saved Walls, disabled with no saved walls).
+**Inventory view.** The Inventory entry sits at the top of the Saved Walls list (fixed, not draggable; it replaced the totals block) and shows the pooled totals: sheets per color, leftover tiles, sheets on walls, swaps. Clicking it shows the inventory image on the main canvas (`renderInventoryView` in `app.js`: fitted and centered, at most 1.5×, on `CANVAS_BG`) and gives the entry a cyan border.
+- Only Load on a saved wall leaves the view (removing the last wall or applying a config with none also closes it).
+- While it's shown, `syncInventoryMode` disables the dimension, void and Corruption Aesthetic fieldsets (faded), Re-Seed, + Save Wall, Update and the Sheet Overlay toggle, and hides the zoom controls. Canvas clicks, drags, wheel zoom and the HUD do nothing. Colors, Invert, Reset and Config JSON stay enabled.
+- Download PNG saves the inventory image (`inventory_<YYYY-MM-DD>.png`) while the view is shown, and the wall otherwise.
+- Download PNG and Export ZIP are disabled with no saved walls (`syncInventoryMode`, run on every list render; `data-busy` keeps a running export's button disabled).
+
+**Saved-walls export** (`ui/export.js`; Export ZIP in the header).
 - **Export ZIP** → `saved-walls_<YYYY-MM-DD>.zip`: for each saved wall, `<name>_<W>x<H>_overlay.png` and `_mockup.png` (rendered with `renderExportCanvas` from the wall's settings in the current shared colors, card named after the wall, no unsaved mark), plus `inventory.png`. Colliding names get `-2`, `-3`. `makeZip` stores entries uncompressed (PNGs are already compressed) with CRC-32 and UTF-8 names; checked with `unzip -t` and Python `zipfile`. Ten walls ≈ 30 MB.
-- **Inventory PNG** → `inventory_<YYYY-MM-DD>.png`, the same image on its own. `drawInventoryImage` (760 CSS px wide at 2×, dark like the spec card): date and colors; one row per wall (name, W × H (tiled), sheets on wall, sheets and leftover tiles per color, each wall settled on its own); the pooled total (`pooledTakeoff`, same numbers as the sidebar); and a reserve table with the pooled minimum, +5% and +10% per color and total (`withReserve`: ceil(min × (1 + level)) per color).
+- **Inventory image** (Download PNG in the inventory view) → `inventory_<YYYY-MM-DD>.png`, the same image on its own. `drawInventoryImage` (takes an optional `at = { x, y, scale }` for the on-screen view) (760 CSS px wide at 2×, dark like the spec card): date and colors; one row per wall (name, W × H (tiled), sheets on wall, sheets and leftover tiles per color, each wall settled on its own); the pooled total (`pooledTakeoff`, same numbers as the sidebar); and a reserve table with the pooled minimum, +5% and +10% per color and total (`withReserve`: ceil(min × (1 + level)) per color).
 - The current unsaved wall isn't included.
 
 **Clean mockup (Sheet Overlay off).** `renderCanvas` drops the planning marks: sheet outlines/badges, cut-tile ghosts, the outside-wall wash, red wall lines and labels, and void outlines, labels and × badges (`drawPlanningMarks` only runs with the overlay on, so `view.voidBadges` stays empty). Usable tiles are clipped to the wall, and voids (clipped to the wall) are filled with `CANVAS_BG` over them, so tiles show how they'd be cut. The margins are `CANVAS_BG` too, and the on-screen content border is skipped. The spec card stays. The PNG export follows the toggle.

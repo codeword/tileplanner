@@ -24,10 +24,11 @@ export function inventoryImageSize(total) {
     return { width: IMG_WIDTH, height };
 }
 
-// total: pooledTakeoff() from ui/takeoff.js; colors: { c1, c2 } hex; date: Date
-export function drawInventoryImage(ctx, total, colors, date, dpr) {
+// total: pooledTakeoff() from ui/takeoff.js; colors: { c1, c2 } hex; date: Date.
+// at: where to draw it, in CSS px (top-left and scale), for the on-screen inventory view.
+export function drawInventoryImage(ctx, total, colors, date, dpr, at = { x: 0, y: 0, scale: 1 }) {
     const { width, height } = inventoryImageSize(total);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.setTransform(dpr * at.scale, 0, 0, dpr * at.scale, dpr * at.x, dpr * at.y);
     ctx.fillStyle = '#0f172a';
     ctx.fillRect(0, 0, width, height);
     ctx.textBaseline = 'middle';

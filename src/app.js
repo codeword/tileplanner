@@ -1,13 +1,15 @@
 // Render loop: runs the pipeline when state changes, redraws on pan/zoom/resize, PNG export.
-import { EXPORT_MAX_PIXELS, EXPORT_PIXEL_DENSITY } from './constants.js';
+import { CANVAS_BG, EXPORT_MAX_PIXELS, EXPORT_PIXEL_DENSITY, FIT_PADDING_PX } from './constants.js';
 import { assignColors } from './fades.js';
 import { buildSheetGrid, markCutTiles } from './geometry.js';
+import { drawInventoryImage, inventoryImageSize } from './inventory-image.js';
 import { computeInventory } from './inventory.js';
 import { renderCanvas } from './renderer.js';
 import { state } from './state.js';
 import { canvas, canvasArea, hudCanvas, tileCtx, zoomLabel } from './ui/canvases.js';
 import { drawHud } from './ui/pointer.js';
-import { currentWall, renderDashboard } from './ui/takeoff.js';
+import { inventoryColors } from './ui/export.js';
+import { currentWall, isInventoryShown, pooledTakeoff, renderDashboard } from './ui/takeoff.js';
 import { computeView } from './view.js';
 
 // Render Loop
@@ -52,9 +54,28 @@ export function renderTiling() {
         c.height = Math.round(lastView.cssHeight * dpr);
     }
 
-    renderCanvas(tileCtx, lastView, lastGrid, lastInventory, state, currentWall(state));
+    if (isInventoryShown()) renderInventoryView(dpr);
+    else renderCanvas(tileCtx, lastView, lastGrid, lastInventory, state, currentWall(state));
     zoomLabel.textContent = Math.round(nav.zoom * 100) + '%';
     drawHud();
+}
+
+// Inventory view: the saved-walls inventory image, fitted and centered on the canvas (never
+// enlarged past 1.5×). No zoom, pan or HUD.
+const INVENTORY_MAX_SCALE = 1.5;
+
+function renderInventoryView(dpr) {
+    const total = pooledTakeoff();
+    const size = inventoryImageSize(total);
+    const scale = Math.max(0.1, Math.min(INVENTORY_MAX_SCALE,
+        (lastView.cssWidth - FIT_PADDING_PX * 2) / size.width,
+        (lastView.cssHeight - FIT_PADDING_PX * 2) / size.height));
+    tileCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    tileCtx.fillStyle = CANVAS_BG;
+    tileCtx.fillRect(0, 0, lastView.cssWidth, lastView.cssHeight);
+    const x = Math.round((lastView.cssWidth - size.width * scale) / 2);
+    const y = Math.round((lastView.cssHeight - size.height * scale) / 2);
+    drawInventoryImage(tileCtx, total, inventoryColors(), new Date(), dpr, { x, y, scale });
 }
 
 // --- Export Canvas as High-Res PNG ---

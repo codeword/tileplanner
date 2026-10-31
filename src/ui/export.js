@@ -1,5 +1,5 @@
 // Saved-walls export: a zip of every wall's overlay and mockup PNGs plus the inventory
-// image, and the inventory image on its own.
+// image, and the inventory image on its own (Download PNG while the inventory is shown).
 import { canvasToBlob, computeWall, downloadBlob, exportFileName, renderExportCanvas } from '../app.js';
 import { drawInventoryImage, inventoryImageSize } from '../inventory-image.js';
 import { normalizeState, state } from '../state.js';
@@ -17,28 +17,36 @@ async function blobBytes(blob) {
     return new Uint8Array(await blob.arrayBuffer());
 }
 
+export function inventoryColors() {
+    return { c1: state.colorTile1, c2: state.colorTile2 };
+}
+
 function inventoryCanvas(total, date) {
     const { width, height } = inventoryImageSize(total);
     const c = document.createElement('canvas');
     c.width = width * INVENTORY_DPR;
     c.height = height * INVENTORY_DPR;
-    drawInventoryImage(c.getContext('2d'), total, { c1: state.colorTile1, c2: state.colorTile2 }, date, INVENTORY_DPR);
+    drawInventoryImage(c.getContext('2d'), total, inventoryColors(), date, INVENTORY_DPR);
     return c;
 }
 
-// Runs an export with the button disabled and relabelled, restoring it afterwards
+// Runs an export with the button disabled and relabelled (its <span>, keeping the icon),
+// restoring it afterwards. data-busy keeps syncInventoryMode from re-enabling it.
 async function withBusyButton(button, label, work) {
-    const original = button.textContent;
+    const target = button.querySelector('span') || button;
+    const original = target.textContent;
     button.disabled = true;
-    button.textContent = label;
+    button.dataset.busy = '1';
+    target.textContent = label;
     try {
         await work();
     } catch (err) {
         console.error('Export failed:', err);
         alert(`Export failed: ${err.message}`);
     } finally {
+        delete button.dataset.busy;
         button.disabled = false;
-        button.textContent = original;
+        target.textContent = original;
     }
 }
 

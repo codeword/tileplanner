@@ -5,6 +5,7 @@ import { isPointInPolygon } from '../geometry.js';
 import { drawPill, voidLabel } from '../renderer.js';
 import { setState, snapInches, state } from '../state.js';
 import { canvas, hudCtx } from './canvases.js';
+import { isInventoryShown } from './takeoff.js';
 import { computeView, toScreen, toWall } from '../view.js';
 
 // --- Cursor HUD (overlay canvas) ---
@@ -23,6 +24,7 @@ export function drawHud() {
     const dpr = view.dpr;
     hudCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
     hudCtx.clearRect(0, 0, view.cssWidth, view.cssHeight);
+    if (isInventoryShown()) return;
 
     // Void being drawn: cyan dashed outline, faint fill and live dimensions
     if (voidPreview) {
@@ -163,7 +165,7 @@ export function zoomAt(screenPt, zoom) {
 
 export function bindCanvasPointer() {
     canvas.addEventListener('pointerdown', (e) => {
-        if (e.button !== 0 || pointerDrag || !lastView) return;
+        if (e.button !== 0 || pointerDrag || !lastView || isInventoryShown()) return;
         const p = canvasPoint(e);
         const badge = voidBadgeAt(p);
         if (badge) {
@@ -235,6 +237,7 @@ export function bindCanvasPointer() {
 
     canvas.addEventListener('wheel', (e) => {
         e.preventDefault();
+        if (isInventoryShown()) return;
         // Trackpad pinch arrives as ctrl+wheel with small deltas; Firefox may report lines
         const deltaY = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
         const factor = Math.exp(-deltaY * (e.ctrlKey ? 0.01 : 0.0015));

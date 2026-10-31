@@ -55,13 +55,19 @@
         </div>
 
         <div class="flex items-center gap-3">
-            <button id="downloadPngBtn" class="px-3 py-1.5 text-xs font-medium bg-emerald-600 hover:bg-emerald-500 text-white rounded-md shadow transition flex items-center gap-1.5">
+            <button id="downloadPngBtn" disabled class="px-3 py-1.5 text-xs font-medium bg-emerald-600 hover:bg-emerald-500 text-white rounded-md shadow transition flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-default disabled:hover:bg-emerald-600" title="The wall, or the inventory when it's shown (needs a saved wall)">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
                 </svg>
                 <span>Download PNG</span>
             </button>
-            <label for="showSheetOverlayCheck" class="px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-md border border-slate-700 transition flex items-center gap-1.5 cursor-pointer select-none">
+            <button id="exportWallsZipBtn" disabled class="px-3 py-1.5 text-xs font-medium bg-emerald-700 hover:bg-emerald-600 text-white rounded-md shadow transition flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-default disabled:hover:bg-emerald-700" title="Every saved wall as overlay and mockup PNGs, plus the inventory image">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                </svg>
+                <span>Export ZIP</span>
+            </button>
+            <label id="showSheetOverlayLabel" for="showSheetOverlayCheck" class="px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-md border border-slate-700 transition flex items-center gap-1.5 cursor-pointer select-none">
                 <input type="checkbox" id="showSheetOverlayCheck" class="rounded border-slate-700 text-cyan-500 focus:ring-0 cursor-pointer">
                 <span>Sheet Overlay</span>
             </label>
@@ -71,7 +77,7 @@
                 </svg>
                 <span>Config JSON</span>
             </button>
-            <button id="randomizeSeedBtn" class="px-3.5 py-1.5 text-xs font-medium bg-cyan-600 hover:bg-cyan-500 text-white rounded-md shadow-sm transition flex items-center gap-1.5">
+            <button id="randomizeSeedBtn" class="px-3.5 py-1.5 text-xs font-medium bg-cyan-600 hover:bg-cyan-500 text-white rounded-md shadow-sm transition flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-default disabled:hover:bg-cyan-600">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                 </svg>
@@ -89,54 +95,6 @@
         <!-- Controls Sidebar -->
         <aside class="w-96 border-r border-slate-800 bg-slate-900/50 p-5 overflow-y-auto space-y-6 text-sm flex-shrink-0">
             
-            <!-- Wall Physical Dimensions -->
-            <div class="space-y-3 bg-slate-900/90 p-4 rounded-xl border border-slate-800">
-                <div class="flex items-center justify-between">
-                    <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-2">
-                        <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
-                        </svg>
-                        Wall Dimensions (Inches)
-                    </h2>
-                </div>
-
-                <div class="grid grid-cols-3 gap-2 pt-1">
-                    <div>
-                        <label class="text-xs text-slate-400 block mb-1">Width (W)</label>
-                        <div class="relative">
-                            <input type="number" id="wallWidthInches" min="12" max="240" step="0.5" class="w-full bg-slate-950 border border-slate-800 rounded-md px-2.5 py-1.5 text-xs font-mono text-cyan-300 focus:outline-none focus:border-cyan-500">
-                            <span class="absolute right-2.5 top-1.5 text-xs text-slate-500 font-mono">in</span>
-                        </div>
-                    </div>
-                    <div>
-                        <label class="text-xs text-slate-400 block mb-1">Total Height (H)</label>
-                        <div class="relative">
-                            <input type="number" id="wallTotalHeightInches" min="24" max="240" step="0.5" class="w-full bg-slate-950 border border-slate-800 rounded-md px-2.5 py-1.5 text-xs font-mono text-cyan-300 focus:outline-none focus:border-cyan-500">
-                            <span class="absolute right-2.5 top-1.5 text-xs text-slate-500 font-mono">in</span>
-                        </div>
-                    </div>
-                    <div>
-                        <label class="text-xs text-slate-400 block mb-1">Tiled Height</label>
-                        <div class="relative">
-                            <input type="number" id="tiledHeightInches" min="12" max="240" step="0.5" class="w-full bg-slate-950 border border-slate-800 rounded-md px-2.5 py-1.5 text-xs font-mono text-cyan-300 focus:outline-none focus:border-cyan-500">
-                            <span class="absolute right-2.5 top-1.5 text-xs text-slate-500 font-mono">in</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="text-[11px] text-slate-500 font-mono">
-                    <span id="paintSpanLabel">Paint above 66″ (42″ un-tiled)</span>
-                </div>
-            </div>
-
-            <!-- Voids (cutouts) -->
-            <div class="space-y-3 bg-slate-900/90 p-4 rounded-xl border border-slate-800">
-                <div class="flex items-center justify-between">
-                    <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Voids (Cutouts)</h2>
-                    <span class="text-[11px] text-slate-500">inches, from floor at left wall</span>
-                </div>
-                <div id="voidList" class="void-list space-y-1.5 text-xs overflow-y-scroll pr-1"></div>
-            </div>
-
             <!-- Palette Selection -->
             <div class="space-y-3 bg-slate-900/90 p-4 rounded-xl border border-slate-800">
                 <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-2">
@@ -206,13 +164,69 @@
                 </div>
             </div>
 
-            <!-- Tiled Section Sub-Zones -->
-            <div class="space-y-3 bg-slate-900/90 p-4 rounded-xl border border-slate-800">
+            <!-- Wall Physical Dimensions -->
+            <fieldset id="wallDimensionsFieldset" class="space-y-3 bg-slate-900/90 p-4 rounded-xl border border-slate-800 min-w-0 transition-opacity">
                 <div class="flex items-center justify-between">
-                    <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Tiled Sub-Zones (% of Tiled Area)</h2>
-                    <span class="text-[11px] font-mono text-cyan-400 font-medium">Sum: 100%</span>
+                    <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                        <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
+                        </svg>
+                        Wall Dimensions (Inches)
+                    </h2>
                 </div>
 
+                <div class="grid grid-cols-3 gap-2 pt-1">
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">Width (W)</label>
+                        <div class="relative">
+                            <input type="number" id="wallWidthInches" min="12" max="240" step="0.5" class="w-full bg-slate-950 border border-slate-800 rounded-md px-2.5 py-1.5 text-xs font-mono text-cyan-300 focus:outline-none focus:border-cyan-500">
+                            <span class="absolute right-2.5 top-1.5 text-xs text-slate-500 font-mono">in</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">Total Height (H)</label>
+                        <div class="relative">
+                            <input type="number" id="wallTotalHeightInches" min="24" max="240" step="0.5" class="w-full bg-slate-950 border border-slate-800 rounded-md px-2.5 py-1.5 text-xs font-mono text-cyan-300 focus:outline-none focus:border-cyan-500">
+                            <span class="absolute right-2.5 top-1.5 text-xs text-slate-500 font-mono">in</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">Tiled Height</label>
+                        <div class="relative">
+                            <input type="number" id="tiledHeightInches" min="12" max="240" step="0.5" class="w-full bg-slate-950 border border-slate-800 rounded-md px-2.5 py-1.5 text-xs font-mono text-cyan-300 focus:outline-none focus:border-cyan-500">
+                            <span class="absolute right-2.5 top-1.5 text-xs text-slate-500 font-mono">in</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="text-[11px] text-slate-500 font-mono">
+                    <span id="paintSpanLabel">Paint above 66″ (42″ un-tiled)</span>
+                </div>
+            </fieldset>
+
+            <!-- Voids (cutouts) -->
+            <fieldset id="voidsFieldset" class="space-y-3 bg-slate-900/90 p-4 rounded-xl border border-slate-800 min-w-0 transition-opacity">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Voids (Cutouts)</h2>
+                    <span class="text-[11px] text-slate-500">inches, from floor at left wall</span>
+                </div>
+                <div id="voidList" class="void-list space-y-1.5 text-xs overflow-y-scroll pr-1"></div>
+            </fieldset>
+
+            <!-- Corruption Aesthetic: fade style and tiled sub-zones -->
+            <fieldset id="aestheticFieldset" class="space-y-3 bg-slate-900/90 p-4 rounded-xl border border-slate-800 min-w-0 transition-opacity">
+                <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Corruption Aesthetic</h2>
+
+                <div>
+                    <label class="text-xs text-slate-400 block mb-1.5">Fade Style</label>
+                    <select id="algorithmSelect" class="w-full bg-slate-950 border border-slate-800 rounded-md px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-cyan-500">
+                        <!-- options are built from FADES -->
+                    </select>
+                </div>
+
+                <div class="flex items-center justify-between text-xs pt-1">
+                    <span class="text-slate-400">Tiled sub-zones (% of tiled area)</span>
+                    <span class="text-[11px] font-mono text-cyan-400 font-medium">Sum: 100%</span>
+                </div>
                 <!-- Live Sub-Zone Bar (left to right = top of the tiled area to the floor) -->
                 <div class="h-3 w-full bg-slate-950 rounded-full flex overflow-hidden border border-slate-800">
                     <div id="barC1" class="bg-indigo-600 transition-all duration-150" title="Top band"></div>
@@ -269,34 +283,14 @@
                         <p class="text-[11px] text-slate-500 mt-1">Stochastically scatters rogue contrasting pixels deep into the Color 1 and Color 2 fields.</p>
                     </div>
                 </div>
-            </div>
-
-            <!-- Transition & Noise Algorithm -->
-            <div class="space-y-3 bg-slate-900/90 p-4 rounded-xl border border-slate-800">
-                <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Corruption Aesthetics</h2>
-
-                <div>
-                    <label class="text-xs text-slate-400 block mb-1.5">Fade Style</label>
-                    <select id="algorithmSelect" class="w-full bg-slate-950 border border-slate-800 rounded-md px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-cyan-500">
-                        <!-- options are built from FADES -->
-                    </select>
-                </div>
-            </div>
+            </fieldset>
 
             <!-- Multi-Wall Purchasing Planner -->
             <div class="space-y-3 bg-slate-900/90 p-4 rounded-xl border border-slate-800">
                 <div class="flex items-center justify-between">
                     <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Saved Walls</h2>
-                    <button id="addWallToTakeoffBtn" class="text-[11px] bg-slate-800 hover:bg-slate-700 text-cyan-400 px-2 py-1 rounded border border-slate-700 transition">
+                    <button id="addWallToTakeoffBtn" class="text-[11px] bg-slate-800 hover:bg-slate-700 text-cyan-400 px-2 py-1 rounded border border-slate-700 transition disabled:opacity-40 disabled:cursor-default disabled:hover:bg-slate-800">
                         + Save Wall
-                    </button>
-                </div>
-                <div class="flex items-center gap-2">
-                    <button id="exportWallsZipBtn" disabled class="text-[11px] bg-slate-800 hover:bg-slate-700 text-cyan-400 px-2 py-1 rounded border border-slate-700 transition disabled:opacity-40 disabled:cursor-default" title="Every saved wall as overlay and mockup PNGs, plus the inventory image">
-                        Export ZIP
-                    </button>
-                    <button id="exportInventoryBtn" disabled class="text-[11px] bg-slate-800 hover:bg-slate-700 text-cyan-400 px-2 py-1 rounded border border-slate-700 transition disabled:opacity-40 disabled:cursor-default" title="Per-wall sheets, pooled total and 5% / 10% reserves">
-                        Inventory PNG
                     </button>
                 </div>
                 <div id="savedWallsList" class="space-y-1.5 text-xs">
@@ -350,8 +344,8 @@
                 <!-- Cursor HUD; never part of the PNG export -->
                 <canvas id="hudCanvas" class="absolute inset-0 w-full h-full block pointer-events-none"></canvas>
 
-                <!-- Zoom controls -->
-                <div class="absolute bottom-3 right-3 flex items-center gap-1 bg-slate-900/90 border border-slate-700 rounded-md p-1 text-xs font-mono shadow-lg">
+                <!-- Zoom controls (hidden in inventory view) -->
+                <div id="zoomControls" class="absolute bottom-3 right-3 flex items-center gap-1 bg-slate-900/90 border border-slate-700 rounded-md p-1 text-xs font-mono shadow-lg">
                     <button id="zoomOutBtn" class="w-6 h-6 rounded text-slate-300 hover:bg-slate-700" title="Zoom out">−</button>
                     <span id="zoomLabel" class="w-12 text-center text-slate-400"></span>
                     <button id="zoomInBtn" class="w-6 h-6 rounded text-slate-300 hover:bg-slate-700" title="Zoom in">+</button>
@@ -904,6 +898,169 @@
                 if (intersect) inside = !inside;
             }
             return inside;
+        }
+
+        // ---- src/inventory-image.js ----
+        // Inventory image for the saved walls: one row per wall, the pooled total, and the
+        // minimum / +5% / +10% sheet reserves per color. Drawn in CSS px; the caller sizes the
+        // canvas from inventoryImageSize() × dpr.
+
+        const IMG_WIDTH = 760;
+        const PAD = 24;
+        const ROW_H = 20;
+        const HEADER_H = 92;      // title, date, color legend
+        const TABLE_HEAD_H = 26;
+        const RESERVE_TOP_GAP = 34;
+        const RESERVE_ROWS = 3;
+        const FOOTER_H = 56;
+
+        const RESERVE_LEVELS = [0, 0.05, 0.10];
+
+        // Sheets with a reserve, rounded up to whole sheets
+        function withReserve(sheets, level) {
+            return Math.ceil(sheets * (1 + level) - 1e-9);
+        }
+
+        function inventoryImageSize(total) {
+            const rows = total.walls.length + 1; // + pooled total
+            const height = PAD + HEADER_H + TABLE_HEAD_H + rows * ROW_H + RESERVE_TOP_GAP + TABLE_HEAD_H + RESERVE_ROWS * ROW_H + FOOTER_H + PAD;
+            return { width: IMG_WIDTH, height };
+        }
+
+        // total: pooledTakeoff() from ui/takeoff.js; colors: { c1, c2 } hex; date: Date.
+        // at: where to draw it, in CSS px (top-left and scale), for the on-screen inventory view.
+        function drawInventoryImage(ctx, total, colors, date, dpr, at = { x: 0, y: 0, scale: 1 }) {
+            const { width, height } = inventoryImageSize(total);
+            ctx.setTransform(dpr * at.scale, 0, 0, dpr * at.scale, dpr * at.x, dpr * at.y);
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(0, 0, width, height);
+            ctx.textBaseline = 'middle';
+
+            const text = (str, x, y, { font = '11px JetBrains Mono, monospace', color = '#cbd5e1', align = 'left', maxWidth } = {}) => {
+                ctx.font = font;
+                ctx.fillStyle = color;
+                ctx.textAlign = align;
+                if (maxWidth) {
+                    let s = str;
+                    while (s.length > 1 && ctx.measureText(s).width > maxWidth) s = s.slice(0, -2) + '…';
+                    ctx.fillText(s, x, y);
+                }
+                else ctx.fillText(str, x, y);
+            };
+            const swatch = (x, y, hex) => {
+                ctx.fillStyle = hex;
+                ctx.beginPath();
+                ctx.arc(x, y, 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            };
+
+            // Header
+            let y = PAD + 10;
+            text('TILE INVENTORY · SAVED WALLS', PAD, y, { font: 'bold 16px Inter, sans-serif', color: '#ffffff' });
+            y += 22;
+            text(`${date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}  ·  Merola Metro Rhombus, 36 tiles per sheet  ·  ${total.walls.length} walls`, PAD, y, { color: '#94a3b8' });
+            y += 26;
+            swatch(PAD + 6, y, colors.c1);
+            text(`Color 1 ${colors.c1.toUpperCase()}`, PAD + 18, y, { font: 'bold 11px JetBrains Mono, monospace', color: '#f59e0b' });
+            swatch(PAD + 186, y, colors.c2);
+            text(`Color 2 ${colors.c2.toUpperCase()}`, PAD + 198, y, { font: 'bold 11px JetBrains Mono, monospace', color: '#38bdf8' });
+
+            // Per-wall table. Columns: name, size, sheets on wall, then sheets/left per color.
+            const right = width - PAD;
+            const cols = [
+                { label: 'Wall', x: PAD, align: 'left' },
+                { label: 'Size (tiled)', x: PAD + 220, align: 'left' },
+                { label: 'On wall', x: PAD + 428, align: 'right' },
+                { label: 'C1 sheets', x: PAD + 508, align: 'right' },
+                { label: 'C1 left', x: PAD + 568, align: 'right' },
+                { label: 'C2 sheets', x: PAD + 648, align: 'right' },
+                { label: 'C2 left', x: right, align: 'right' }
+            ];
+            const headerRow = (yy, labels) => {
+                ctx.fillStyle = '#1e293b';
+                ctx.fillRect(PAD - 8, yy - TABLE_HEAD_H / 2, width - 2 * PAD + 16, TABLE_HEAD_H);
+                labels.forEach(([label, x, align]) => text(label, x, yy, { font: 'bold 10px Inter, sans-serif', color: '#94a3b8', align }));
+            };
+            const rowBand = (yy, i) => {
+                if (i % 2 === 1) {
+                    ctx.fillStyle = 'rgba(30, 41, 59, 0.45)';
+                    ctx.fillRect(PAD - 8, yy - ROW_H / 2, width - 2 * PAD + 16, ROW_H);
+                }
+            };
+
+            y = PAD + HEADER_H + TABLE_HEAD_H / 2;
+            headerRow(y, cols.map(c => [c.label, c.x, c.align]));
+            y += TABLE_HEAD_H / 2 + ROW_H / 2;
+
+            total.walls.forEach((w, i) => {
+                const s = w.settings;
+                rowBand(y, i);
+                const cells = [
+                    w.name,
+                    `${s.wallWidthInches}″ × ${s.wallTotalHeightInches}″ (${s.tiledHeightInches}″)`,
+                    String(w.inv.totalSheets),
+                    String(w.inv.buyC1),
+                    String(w.inv.leftoverC1),
+                    String(w.inv.buyC2),
+                    String(w.inv.leftoverC2)
+                ];
+                cells.forEach((c, j) => text(c, cols[j].x, y, {
+                    align: cols[j].align,
+                    color: j === 3 ? '#fbbf24' : j === 5 ? '#7dd3fc' : '#cbd5e1',
+                    maxWidth: j === 0 ? 210 : undefined
+                }));
+                y += ROW_H;
+            });
+
+            // Pooled total
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(PAD - 8, y - ROW_H / 2 + 0.5);
+            ctx.lineTo(width - PAD + 8, y - ROW_H / 2 + 0.5);
+            ctx.stroke();
+            const bold = 'bold 11px JetBrains Mono, monospace';
+            text('Total (pooled)', cols[0].x, y, { font: bold, color: '#ffffff' });
+            text(String(total.sheetsOnWalls), cols[2].x, y, { font: bold, color: '#ffffff', align: 'right' });
+            text(String(total.c1.buy), cols[3].x, y, { font: bold, color: '#fbbf24', align: 'right' });
+            text(String(total.c1.leftover), cols[4].x, y, { font: bold, color: '#ffffff', align: 'right' });
+            text(String(total.c2.buy), cols[5].x, y, { font: bold, color: '#7dd3fc', align: 'right' });
+            text(String(total.c2.leftover), cols[6].x, y, { font: bold, color: '#ffffff', align: 'right' });
+            y += ROW_H / 2;
+
+            // Reserves on the pooled minimum, rounded up per color
+            y += RESERVE_TOP_GAP - 8;
+            text('SHEETS TO HAVE ON HAND', PAD, y - 12, { font: 'bold 11px Inter, sans-serif', color: '#ffffff' });
+            y += TABLE_HEAD_H / 2;
+            const rcols = [
+                ['', PAD, 'left'],
+                ['Color 1', PAD + 300, 'right'],
+                ['Color 2', PAD + 440, 'right'],
+                ['Total', PAD + 580, 'right']
+            ];
+            headerRow(y, rcols);
+            y += TABLE_HEAD_H / 2 + ROW_H / 2;
+            RESERVE_LEVELS.forEach((level, i) => {
+                rowBand(y, i);
+                const c1 = withReserve(total.c1.buy, level);
+                const c2 = withReserve(total.c2.buy, level);
+                const extra = (n, base) => level ? `${n} (+${n - base})` : String(n);
+                text(level ? `+${Math.round(level * 100)}% reserve` : 'Minimum', rcols[0][1], y, { font: level ? undefined : bold, color: '#ffffff' });
+                text(extra(c1, total.c1.buy), rcols[1][1], y, { color: '#fbbf24', align: 'right' });
+                text(extra(c2, total.c2.buy), rcols[2][1], y, { color: '#7dd3fc', align: 'right' });
+                text(extra(c1 + c2, total.c1.buy + total.c2.buy), rcols[3][1], y, { color: '#ffffff', align: 'right' });
+                y += ROW_H;
+            });
+
+            // Footer: how the numbers are made
+            y += 12;
+            const note = { font: '10px Inter, sans-serif', color: '#64748b' };
+            text('Sheets per color = majority sheets + extra sheets for hand-swaps − whole sheets\' worth of spare tiles (0–35 tiles left).', PAD, y, note);
+            text('The total is pooled: one wall\'s spares cover another\'s swaps, so it can be less than the sum of the walls.', PAD, y + 15, note);
+            text('Reserves are added to the pooled minimum and rounded up to whole sheets per color.', PAD, y + 30, note);
         }
 
         // ---- src/inventory.js ----
@@ -1597,244 +1754,6 @@
         const hudCtx = hudCanvas.getContext('2d');
         const zoomLabel = document.getElementById('zoomLabel');
 
-        // ---- src/ui/pointer.js ----
-        // Canvas pointer: click to flip, drag to draw voids, Shift+drag pan, wheel zoom, cursor HUD.
-
-        // --- Cursor HUD (overlay canvas) ---
-        // Shows the wall coordinate under the cursor, with guide lines to the floor line and the
-        // left wall edge. Hidden while dragging and when the cursor is off the plan.
-        let hoverPoint = null; // CSS px within the canvas, or null
-
-        function formatInches(v) {
-            const rounded = Math.round(v * 10) / 10;
-            return (Object.is(rounded, -0) ? 0 : rounded).toFixed(1) + '″';
-        }
-
-        function drawHud() {
-            if (!lastView) return;
-            const view = lastView;
-            const dpr = view.dpr;
-            hudCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-            hudCtx.clearRect(0, 0, view.cssWidth, view.cssHeight);
-
-            // Void being drawn: cyan dashed outline, faint fill and live dimensions
-            if (voidPreview) {
-                const v = voidPreview;
-                const tl = toScreen(view, v.x, v.y + v.h);
-                const br = toScreen(view, v.x + v.w, v.y);
-                hudCtx.save();
-                hudCtx.fillStyle = 'rgba(34, 211, 238, 0.12)';
-                hudCtx.fillRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
-                hudCtx.strokeStyle = '#22d3ee';
-                hudCtx.lineWidth = 1.5;
-                hudCtx.setLineDash([6, 4]);
-                hudCtx.strokeRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
-                hudCtx.restore();
-                drawPill(hudCtx, voidLabel(v), (tl.x + br.x) / 2, (tl.y + br.y) / 2);
-                return;
-            }
-
-            const c = view.content;
-            if (!hoverPoint || (pointerDrag && pointerDrag.dragging)) return;
-            const { x: sx, y: sy } = hoverPoint;
-            if (sx < c.x || sx > c.x + c.width || sy < c.y || sy > c.y + c.height) return;
-
-            const pt = toWall(view, sx, sy);
-
-            // Guide lines to the floor line and the left wall edge
-            hudCtx.save();
-            hudCtx.strokeStyle = 'rgba(34, 211, 238, 0.85)';
-            hudCtx.lineWidth = 1;
-            hudCtx.setLineDash([4, 4]);
-            hudCtx.beginPath();
-            hudCtx.moveTo(Math.round(sx) + 0.5, sy);
-            hudCtx.lineTo(Math.round(sx) + 0.5, view.originY);
-            hudCtx.moveTo(sx, Math.round(sy) + 0.5);
-            hudCtx.lineTo(view.originX, Math.round(sy) + 0.5);
-            hudCtx.stroke();
-            hudCtx.restore();
-
-            // Badge next to the cursor, flipped to the other side near the canvas edges
-            const tile = tileAt(pt);
-            const label = `X: ${formatInches(pt.x)}, Y: ${formatInches(pt.y)}` + (tile ? `  Sheet ${tile.sheetId}, tile ${tile.tileNumber}` : '');
-            hudCtx.font = '600 11px JetBrains Mono, monospace';
-            const w = Math.ceil(hudCtx.measureText(label).width) + 14;
-            const h = 22;
-            const gap = 14;
-            let bx = sx + gap;
-            let by = sy + gap;
-            if (bx + w > view.cssWidth - 4) bx = sx - gap - w;
-            if (by + h > view.cssHeight - 4) by = sy - gap - h;
-            bx = Math.max(4, bx);
-            by = Math.max(4, by);
-
-            hudCtx.fillStyle = 'rgba(15, 23, 42, 0.92)';
-            hudCtx.beginPath();
-            hudCtx.roundRect(bx, by, w, h, 4);
-            hudCtx.fill();
-            hudCtx.strokeStyle = 'rgba(34, 211, 238, 0.7)';
-            hudCtx.lineWidth = 1;
-            hudCtx.stroke();
-
-            hudCtx.fillStyle = '#e0f2fe';
-            hudCtx.textAlign = 'left';
-            hudCtx.textBaseline = 'middle';
-            hudCtx.fillText(label, bx + 7, by + h / 2);
-        }
-
-        let hudFrameId = null;
-        function scheduleHud() {
-            if (hudFrameId) return;
-            hudFrameId = requestAnimationFrame(() => {
-                hudFrameId = null;
-                drawHud();
-            });
-        }
-
-        // --- Canvas pointer & navigation ---
-        // A press that moves less than DRAG_THRESHOLD_PX is a click (flips the tile under it, or
-        // deletes a void via its × badge). Shift+drag pans. A plain drag draws a void.
-        let pointerDrag = null; // { id, startX, startY, lastX, lastY, startWall, pan, dragging, cancelled }
-        let voidPreview = null; // void being drawn, in wall inches
-
-        // Rectangle between two wall points, snapped to 1/16″ and clamped to the wall
-        function voidFromDrag(a, b) {
-            const clampX = (v) => Math.min(state.wallWidthInches, Math.max(0, snapInches(v)));
-            const clampY = (v) => Math.min(state.wallTotalHeightInches, Math.max(0, snapInches(v)));
-            const x0 = clampX(Math.min(a.x, b.x)), x1 = clampX(Math.max(a.x, b.x));
-            const y0 = clampY(Math.min(a.y, b.y)), y1 = clampY(Math.max(a.y, b.y));
-            return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
-        }
-
-        function voidBadgeAt(p) {
-            if (!lastView) return null;
-            return lastView.voidBadges.find(b => Math.hypot(p.x - b.x, p.y - b.y) <= VOID_BADGE_RADIUS_PX + 2) || null;
-        }
-
-        function deleteVoid(id) {
-            setState({ voids: state.voids.filter(v => v.id !== id) });
-        }
-
-        function canvasPoint(e) {
-            const rect = canvas.getBoundingClientRect();
-            return { x: e.clientX - rect.left, y: e.clientY - rect.top };
-        }
-
-        function canvasCenter() {
-            return { x: canvas.clientWidth / 2, y: canvas.clientHeight / 2 };
-        }
-
-        // The tile under a wall point (topmost drawn first), or null
-        function tileAt(pt) {
-            if (!lastGrid) return null;
-            const tiles = lastGrid.tiles;
-            for (let i = tiles.length - 1; i >= 0; i--) {
-                if (isPointInPolygon(pt, tiles[i].points)) return tiles[i];
-            }
-            return null;
-        }
-
-        function flipTileAt(screenPt) {
-            const tile = tileAt(toWall(lastView, screenPt.x, screenPt.y));
-            if (!tile || tile.cut) return; // spares can't be flipped
-            setState({
-                manualOverrides: { ...state.manualOverrides, [tile.overrideKey]: 1 - tile.colorIdx }
-            });
-        }
-
-        // Zoom to `zoom` keeping the wall point under `screenPt` fixed
-        function zoomAt(screenPt, zoom) {
-            if (!lastView) return;
-            const anchor = toWall(lastView, screenPt.x, screenPt.y);
-            nav.zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoom));
-            const next = computeView(state, lastArea, lastView.dpr, nav);
-            const moved = toScreen(next, anchor.x, anchor.y);
-            nav.panX += screenPt.x - moved.x;
-            nav.panY += screenPt.y - moved.y;
-            scheduleRender();
-        }
-
-        function bindCanvasPointer() {
-            canvas.addEventListener('pointerdown', (e) => {
-                if (e.button !== 0 || pointerDrag || !lastView) return;
-                const p = canvasPoint(e);
-                const badge = voidBadgeAt(p);
-                if (badge) {
-                    deleteVoid(badge.id);
-                    return;
-                }
-                pointerDrag = {
-                    id: e.pointerId, startX: p.x, startY: p.y, lastX: p.x, lastY: p.y,
-                    startWall: toWall(lastView, p.x, p.y), pan: e.shiftKey, dragging: false, cancelled: false
-                };
-                try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* synthetic pointer */ }
-            });
-
-            canvas.addEventListener('pointermove', (e) => {
-                const p = canvasPoint(e);
-                hoverPoint = p;
-                const d = pointerDrag;
-                if (d && e.pointerId === d.id) {
-                    if (!d.dragging && Math.hypot(p.x - d.startX, p.y - d.startY) >= DRAG_THRESHOLD_PX) {
-                        d.dragging = true;
-                        if (d.pan) canvas.style.cursor = 'grabbing';
-                    }
-                    if (d.dragging && d.pan) {
-                        nav.panX += p.x - d.lastX;
-                        nav.panY += p.y - d.lastY;
-                        scheduleRender();
-                    } else if (d.dragging && !d.cancelled) {
-                        voidPreview = voidFromDrag(d.startWall, toWall(lastView, p.x, p.y));
-                    }
-                    d.lastX = p.x;
-                    d.lastY = p.y;
-                } else if (!d) {
-                    canvas.style.cursor = voidBadgeAt(p) ? 'pointer' : '';
-                }
-                scheduleHud();
-            });
-
-            const endDrag = (e, cancelled) => {
-                const d = pointerDrag;
-                if (!d || e.pointerId !== d.id) return;
-                pointerDrag = null;
-                canvas.style.cursor = '';
-                try { canvas.releasePointerCapture(e.pointerId); } catch (err) { /* synthetic pointer */ }
-                const rect = voidPreview;
-                voidPreview = null;
-                if (!cancelled && !d.cancelled) {
-                    if (!d.dragging) flipTileAt(canvasPoint(e));
-                    else if (!d.pan && rect && rect.w > 0 && rect.h > 0) setState({ voids: [...state.voids, { id: null, ...rect }] });
-                }
-                scheduleHud();
-            };
-            canvas.addEventListener('pointerup', (e) => endDrag(e, false));
-            canvas.addEventListener('pointercancel', (e) => endDrag(e, true));
-
-            canvas.addEventListener('pointerleave', () => {
-                if (pointerDrag) return; // captured; keep the HUD state until release
-                hoverPoint = null;
-                scheduleHud();
-            });
-
-            // Escape abandons a void being drawn
-            window.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape' && pointerDrag && !pointerDrag.pan) {
-                    pointerDrag.cancelled = true;
-                    voidPreview = null;
-                    scheduleHud();
-                }
-            });
-
-            canvas.addEventListener('wheel', (e) => {
-                e.preventDefault();
-                // Trackpad pinch arrives as ctrl+wheel with small deltas; Firefox may report lines
-                const deltaY = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
-                const factor = Math.exp(-deltaY * (e.ctrlKey ? 0.01 : 0.0015));
-                zoomAt(canvasPoint(e), nav.zoom * factor);
-            }, { passive: false });
-        }
-
         // ---- src/config.js ----
         // Config JSON: saved walls to config, and config (any version) to colors + walls with warnings.
 
@@ -2137,6 +2056,43 @@
             renderSavedWallsList();
         }
 
+        // --- Inventory view ---
+        // The Inventory entry (top of the list) shows the saved-walls inventory on the main canvas
+        // instead of the wall. Only Load on a saved wall leaves it (or removing the last wall). While
+        // it's shown, the wall controls are disabled (syncInventoryMode).
+        let inventoryShown = false;
+
+        function isInventoryShown() {
+            return inventoryShown;
+        }
+
+        function setInventoryShown(shown) {
+            inventoryShown = shown && savedWalls.length > 0;
+            renderSavedWallsList();
+            scheduleRender();
+        }
+
+        // Wall-only controls: the dimension, void and corruption-aesthetic fieldsets, Re-Seed,
+        // + Save Wall and the sheet overlay toggle. Update is disabled in the list rendering.
+        function syncInventoryMode() {
+            for (const id of ['wallDimensionsFieldset', 'voidsFieldset', 'aestheticFieldset']) {
+                const fs = document.getElementById(id);
+                fs.disabled = inventoryShown;
+                fs.classList.toggle('opacity-50', inventoryShown);
+            }
+            for (const id of ['randomizeSeedBtn', 'addWallToTakeoffBtn', 'showSheetOverlayCheck']) {
+                document.getElementById(id).disabled = inventoryShown;
+            }
+            document.getElementById('showSheetOverlayLabel').classList.toggle('opacity-50', inventoryShown);
+            document.getElementById('zoomControls').classList.toggle('hidden', inventoryShown);
+            // Download PNG (wall or inventory) and Export ZIP need at least one saved wall
+            for (const id of ['downloadPngBtn', 'exportWallsZipBtn']) {
+                const btn = document.getElementById(id);
+                if (btn.dataset.busy) continue; // an export is running
+                btn.disabled = savedWalls.length === 0;
+            }
+        }
+
         // State listener: re-renders the list only when the linked entry's unsaved mark flips
         function syncSavedWallsList() {
             if (linkedWall && isUnsaved(state) !== linkedShownUnsaved) renderSavedWallsList();
@@ -2149,6 +2105,7 @@
         function setSavedWalls(walls) {
             savedWalls = walls.slice();
             linkedWall = null;
+            if (!savedWalls.length) inventoryShown = false;
             renderSavedWallsList();
             scheduleRender();
         }
@@ -2199,18 +2156,23 @@
         function renderSavedWallsList() {
             const list = document.getElementById('savedWallsList');
             linkedShownUnsaved = Boolean(linkedWall) && isUnsaved(state);
-            for (const id of ['exportWallsZipBtn', 'exportInventoryBtn']) {
-                const btn = document.getElementById(id);
-                if (btn.textContent.trim().endsWith('…')) continue; // an export is running
-                btn.disabled = savedWalls.length === 0;
-            }
+            syncInventoryMode();
             if (savedWalls.length === 0) {
                 list.innerHTML = `<div class="text-[11px] text-slate-500 italic p-1">No additional walls saved.</div>`;
                 return;
             }
 
-            let html = '';
             const total = pooledTakeoff();
+            const { c1, c2 } = total;
+            // Inventory entry: fixed above the walls (not draggable), with the pooled totals
+            let html = `
+                <button type="button" data-action="inventory" class="block w-full text-left bg-slate-950 p-2 rounded border ${inventoryShown ? 'border-cyan-600' : 'border-slate-800 hover:border-slate-600'} font-mono text-[11px]" title="Show the inventory on the canvas">
+                    <div class="font-sans font-medium text-slate-200 flex items-center justify-between">Inventory <span class="text-[10px] text-cyan-400 font-mono">${inventoryShown ? 'shown' : 'view'}</span></div>
+                    <div class="text-cyan-300">Total: ${c1.buy + c2.buy} sheets (${c1.buy} C1 + ${c2.buy} C2)</div>
+                    <div class="text-slate-400">Leftover: ${c1.leftover} C1, ${c2.leftover} C2 tiles | ${total.sheetsOnWalls} sheets on walls</div>
+                    <div class="text-amber-400 text-[10px]">Swaps: ${total.swappedC1 + total.swappedC2} (${total.swappedC1} C1, ${total.swappedC2} C2)</div>
+                </button>
+            `;
 
             savedWalls.forEach((w, idx) => {
                 const inv = total.walls[idx].inv;
@@ -2230,22 +2192,13 @@
                             </div>
                         </div>
                         <div class="flex items-center gap-2 ml-2">
-                            ${linked ? `<button type="button" data-action="update" class="text-amber-400 hover:text-amber-300 disabled:text-slate-600 disabled:cursor-default" title="${unsaved ? 'Save the current changes into this wall' : 'No changes to save'}" ${unsaved ? '' : 'disabled'}>Update</button>` : ''}
+                            ${linked ? `<button type="button" data-action="update" class="text-amber-400 hover:text-amber-300 disabled:text-slate-600 disabled:cursor-default" title="${unsaved ? 'Save the current changes into this wall' : 'No changes to save'}" ${unsaved && !inventoryShown ? '' : 'disabled'}>Update</button>` : ''}
                             <button type="button" data-action="load" class="text-cyan-400 hover:text-cyan-300" title="Load this wall">Load</button>
                             <button type="button" data-action="remove" class="text-rose-400 hover:text-rose-300" title="Remove from takeoff">✕</button>
                         </div>
                     </div>
                 `;
             });
-
-            const { c1, c2 } = total;
-            html += `
-                <div class="pt-2 border-t border-slate-800 font-mono text-[11px] text-cyan-300">
-                    <div>Total Takeoff: ${c1.buy + c2.buy} sheets (${c1.buy} C1 + ${c2.buy} C2)</div>
-                    <div class="text-slate-400">Leftover: ${c1.leftover} C1, ${c2.leftover} C2 tiles | ${total.sheetsOnWalls} sheets on walls</div>
-                    <div class="text-amber-400 text-[10px]">Total Swaps: ${total.swappedC1 + total.swappedC2} (${total.swappedC1} C1, ${total.swappedC2} C2)</div>
-                </div>
-            `;
 
             list.innerHTML = html;
         }
@@ -2321,6 +2274,10 @@
             const list = document.getElementById('savedWallsList');
             list.addEventListener('click', (e) => {
                 const btn = e.target.closest('button[data-action]');
+                if (btn?.dataset.action === 'inventory') {
+                    setInventoryShown(true);
+                    return;
+                }
                 const row = e.target.closest('[data-wall-index]');
                 if (!btn || !row) return;
                 const index = Number(row.dataset.wallIndex);
@@ -2329,13 +2286,16 @@
                 if (btn.dataset.action === 'remove') {
                     savedWalls.splice(index, 1);
                     if (wall === linkedWall) linkedWall = null;
+                    if (!savedWalls.length) inventoryShown = false;
                     renderSavedWallsList();
                     scheduleRender();
                 } else if (btn.dataset.action === 'load') {
                     // Only the wall's own settings; the shared colors stay
                     linkedWall = wall;
+                    inventoryShown = false;
                     setState(wall.settings);
                     renderSavedWallsList(); // highlight, even when the settings didn't change
+                    scheduleRender();
                 } else if (btn.dataset.action === 'update') {
                     updateLinkedWall();
                 } else if (btn.dataset.action === 'rename') {
@@ -2343,6 +2303,415 @@
                 }
             });
             bindDragReorder(list);
+        }
+
+        // ---- src/ui/pointer.js ----
+        // Canvas pointer: click to flip, drag to draw voids, Shift+drag pan, wheel zoom, cursor HUD.
+
+        // --- Cursor HUD (overlay canvas) ---
+        // Shows the wall coordinate under the cursor, with guide lines to the floor line and the
+        // left wall edge. Hidden while dragging and when the cursor is off the plan.
+        let hoverPoint = null; // CSS px within the canvas, or null
+
+        function formatInches(v) {
+            const rounded = Math.round(v * 10) / 10;
+            return (Object.is(rounded, -0) ? 0 : rounded).toFixed(1) + '″';
+        }
+
+        function drawHud() {
+            if (!lastView) return;
+            const view = lastView;
+            const dpr = view.dpr;
+            hudCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            hudCtx.clearRect(0, 0, view.cssWidth, view.cssHeight);
+            if (isInventoryShown()) return;
+
+            // Void being drawn: cyan dashed outline, faint fill and live dimensions
+            if (voidPreview) {
+                const v = voidPreview;
+                const tl = toScreen(view, v.x, v.y + v.h);
+                const br = toScreen(view, v.x + v.w, v.y);
+                hudCtx.save();
+                hudCtx.fillStyle = 'rgba(34, 211, 238, 0.12)';
+                hudCtx.fillRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
+                hudCtx.strokeStyle = '#22d3ee';
+                hudCtx.lineWidth = 1.5;
+                hudCtx.setLineDash([6, 4]);
+                hudCtx.strokeRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
+                hudCtx.restore();
+                drawPill(hudCtx, voidLabel(v), (tl.x + br.x) / 2, (tl.y + br.y) / 2);
+                return;
+            }
+
+            const c = view.content;
+            if (!hoverPoint || (pointerDrag && pointerDrag.dragging)) return;
+            const { x: sx, y: sy } = hoverPoint;
+            if (sx < c.x || sx > c.x + c.width || sy < c.y || sy > c.y + c.height) return;
+
+            const pt = toWall(view, sx, sy);
+
+            // Guide lines to the floor line and the left wall edge
+            hudCtx.save();
+            hudCtx.strokeStyle = 'rgba(34, 211, 238, 0.85)';
+            hudCtx.lineWidth = 1;
+            hudCtx.setLineDash([4, 4]);
+            hudCtx.beginPath();
+            hudCtx.moveTo(Math.round(sx) + 0.5, sy);
+            hudCtx.lineTo(Math.round(sx) + 0.5, view.originY);
+            hudCtx.moveTo(sx, Math.round(sy) + 0.5);
+            hudCtx.lineTo(view.originX, Math.round(sy) + 0.5);
+            hudCtx.stroke();
+            hudCtx.restore();
+
+            // Badge next to the cursor, flipped to the other side near the canvas edges
+            const tile = tileAt(pt);
+            const label = `X: ${formatInches(pt.x)}, Y: ${formatInches(pt.y)}` + (tile ? `  Sheet ${tile.sheetId}, tile ${tile.tileNumber}` : '');
+            hudCtx.font = '600 11px JetBrains Mono, monospace';
+            const w = Math.ceil(hudCtx.measureText(label).width) + 14;
+            const h = 22;
+            const gap = 14;
+            let bx = sx + gap;
+            let by = sy + gap;
+            if (bx + w > view.cssWidth - 4) bx = sx - gap - w;
+            if (by + h > view.cssHeight - 4) by = sy - gap - h;
+            bx = Math.max(4, bx);
+            by = Math.max(4, by);
+
+            hudCtx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+            hudCtx.beginPath();
+            hudCtx.roundRect(bx, by, w, h, 4);
+            hudCtx.fill();
+            hudCtx.strokeStyle = 'rgba(34, 211, 238, 0.7)';
+            hudCtx.lineWidth = 1;
+            hudCtx.stroke();
+
+            hudCtx.fillStyle = '#e0f2fe';
+            hudCtx.textAlign = 'left';
+            hudCtx.textBaseline = 'middle';
+            hudCtx.fillText(label, bx + 7, by + h / 2);
+        }
+
+        let hudFrameId = null;
+        function scheduleHud() {
+            if (hudFrameId) return;
+            hudFrameId = requestAnimationFrame(() => {
+                hudFrameId = null;
+                drawHud();
+            });
+        }
+
+        // --- Canvas pointer & navigation ---
+        // A press that moves less than DRAG_THRESHOLD_PX is a click (flips the tile under it, or
+        // deletes a void via its × badge). Shift+drag pans. A plain drag draws a void.
+        let pointerDrag = null; // { id, startX, startY, lastX, lastY, startWall, pan, dragging, cancelled }
+        let voidPreview = null; // void being drawn, in wall inches
+
+        // Rectangle between two wall points, snapped to 1/16″ and clamped to the wall
+        function voidFromDrag(a, b) {
+            const clampX = (v) => Math.min(state.wallWidthInches, Math.max(0, snapInches(v)));
+            const clampY = (v) => Math.min(state.wallTotalHeightInches, Math.max(0, snapInches(v)));
+            const x0 = clampX(Math.min(a.x, b.x)), x1 = clampX(Math.max(a.x, b.x));
+            const y0 = clampY(Math.min(a.y, b.y)), y1 = clampY(Math.max(a.y, b.y));
+            return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+        }
+
+        function voidBadgeAt(p) {
+            if (!lastView) return null;
+            return lastView.voidBadges.find(b => Math.hypot(p.x - b.x, p.y - b.y) <= VOID_BADGE_RADIUS_PX + 2) || null;
+        }
+
+        function deleteVoid(id) {
+            setState({ voids: state.voids.filter(v => v.id !== id) });
+        }
+
+        function canvasPoint(e) {
+            const rect = canvas.getBoundingClientRect();
+            return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        }
+
+        function canvasCenter() {
+            return { x: canvas.clientWidth / 2, y: canvas.clientHeight / 2 };
+        }
+
+        // The tile under a wall point (topmost drawn first), or null
+        function tileAt(pt) {
+            if (!lastGrid) return null;
+            const tiles = lastGrid.tiles;
+            for (let i = tiles.length - 1; i >= 0; i--) {
+                if (isPointInPolygon(pt, tiles[i].points)) return tiles[i];
+            }
+            return null;
+        }
+
+        function flipTileAt(screenPt) {
+            const tile = tileAt(toWall(lastView, screenPt.x, screenPt.y));
+            if (!tile || tile.cut) return; // spares can't be flipped
+            setState({
+                manualOverrides: { ...state.manualOverrides, [tile.overrideKey]: 1 - tile.colorIdx }
+            });
+        }
+
+        // Zoom to `zoom` keeping the wall point under `screenPt` fixed
+        function zoomAt(screenPt, zoom) {
+            if (!lastView) return;
+            const anchor = toWall(lastView, screenPt.x, screenPt.y);
+            nav.zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoom));
+            const next = computeView(state, lastArea, lastView.dpr, nav);
+            const moved = toScreen(next, anchor.x, anchor.y);
+            nav.panX += screenPt.x - moved.x;
+            nav.panY += screenPt.y - moved.y;
+            scheduleRender();
+        }
+
+        function bindCanvasPointer() {
+            canvas.addEventListener('pointerdown', (e) => {
+                if (e.button !== 0 || pointerDrag || !lastView || isInventoryShown()) return;
+                const p = canvasPoint(e);
+                const badge = voidBadgeAt(p);
+                if (badge) {
+                    deleteVoid(badge.id);
+                    return;
+                }
+                pointerDrag = {
+                    id: e.pointerId, startX: p.x, startY: p.y, lastX: p.x, lastY: p.y,
+                    startWall: toWall(lastView, p.x, p.y), pan: e.shiftKey, dragging: false, cancelled: false
+                };
+                try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* synthetic pointer */ }
+            });
+
+            canvas.addEventListener('pointermove', (e) => {
+                const p = canvasPoint(e);
+                hoverPoint = p;
+                const d = pointerDrag;
+                if (d && e.pointerId === d.id) {
+                    if (!d.dragging && Math.hypot(p.x - d.startX, p.y - d.startY) >= DRAG_THRESHOLD_PX) {
+                        d.dragging = true;
+                        if (d.pan) canvas.style.cursor = 'grabbing';
+                    }
+                    if (d.dragging && d.pan) {
+                        nav.panX += p.x - d.lastX;
+                        nav.panY += p.y - d.lastY;
+                        scheduleRender();
+                    } else if (d.dragging && !d.cancelled) {
+                        voidPreview = voidFromDrag(d.startWall, toWall(lastView, p.x, p.y));
+                    }
+                    d.lastX = p.x;
+                    d.lastY = p.y;
+                } else if (!d) {
+                    canvas.style.cursor = voidBadgeAt(p) ? 'pointer' : '';
+                }
+                scheduleHud();
+            });
+
+            const endDrag = (e, cancelled) => {
+                const d = pointerDrag;
+                if (!d || e.pointerId !== d.id) return;
+                pointerDrag = null;
+                canvas.style.cursor = '';
+                try { canvas.releasePointerCapture(e.pointerId); } catch (err) { /* synthetic pointer */ }
+                const rect = voidPreview;
+                voidPreview = null;
+                if (!cancelled && !d.cancelled) {
+                    if (!d.dragging) flipTileAt(canvasPoint(e));
+                    else if (!d.pan && rect && rect.w > 0 && rect.h > 0) setState({ voids: [...state.voids, { id: null, ...rect }] });
+                }
+                scheduleHud();
+            };
+            canvas.addEventListener('pointerup', (e) => endDrag(e, false));
+            canvas.addEventListener('pointercancel', (e) => endDrag(e, true));
+
+            canvas.addEventListener('pointerleave', () => {
+                if (pointerDrag) return; // captured; keep the HUD state until release
+                hoverPoint = null;
+                scheduleHud();
+            });
+
+            // Escape abandons a void being drawn
+            window.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && pointerDrag && !pointerDrag.pan) {
+                    pointerDrag.cancelled = true;
+                    voidPreview = null;
+                    scheduleHud();
+                }
+            });
+
+            canvas.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                if (isInventoryShown()) return;
+                // Trackpad pinch arrives as ctrl+wheel with small deltas; Firefox may report lines
+                const deltaY = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+                const factor = Math.exp(-deltaY * (e.ctrlKey ? 0.01 : 0.0015));
+                zoomAt(canvasPoint(e), nav.zoom * factor);
+            }, { passive: false });
+        }
+
+        // ---- src/zip.js ----
+        // Minimal zip writer: stored entries (no compression; PNGs are already compressed), so the
+        // single-file build needs no library and works offline.
+
+        const CRC_TABLE = (() => {
+            const table = new Uint32Array(256);
+            for (let n = 0; n < 256; n++) {
+                let c = n;
+                for (let k = 0; k < 8; k++) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+                table[n] = c >>> 0;
+            }
+            return table;
+        })();
+
+        function crc32(bytes) {
+            let c = 0xffffffff;
+            for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
+            return (c ^ 0xffffffff) >>> 0;
+        }
+
+        // MS-DOS date/time fields used by zip headers
+        function dosDateTime(d) {
+            const time = (d.getHours() << 11) | (d.getMinutes() << 5) | Math.floor(d.getSeconds() / 2);
+            const date = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+            return { time, date };
+        }
+
+        // files: [{ name, data: Uint8Array }] → Blob (application/zip). Names are stored as UTF-8.
+        function makeZip(files, when = new Date()) {
+            const encoder = new TextEncoder();
+            const { time, date } = dosDateTime(when);
+            const parts = [];
+            const central = [];
+            let offset = 0;
+
+            for (const file of files) {
+                const name = encoder.encode(file.name);
+                const crc = crc32(file.data);
+                const size = file.data.length;
+
+                const local = new DataView(new ArrayBuffer(30));
+                local.setUint32(0, 0x04034b50, true); // local file header
+                local.setUint16(4, 20, true);         // version needed
+                local.setUint16(6, 0x0800, true);     // flags: UTF-8 names
+                local.setUint16(8, 0, true);          // method: stored
+                local.setUint16(10, time, true);
+                local.setUint16(12, date, true);
+                local.setUint32(14, crc, true);
+                local.setUint32(18, size, true);
+                local.setUint32(22, size, true);
+                local.setUint16(26, name.length, true);
+                local.setUint16(28, 0, true);
+                parts.push(local, name, file.data);
+
+                const entry = new DataView(new ArrayBuffer(46));
+                entry.setUint32(0, 0x02014b50, true); // central directory header
+                entry.setUint16(4, 20, true);         // version made by
+                entry.setUint16(6, 20, true);         // version needed
+                entry.setUint16(8, 0x0800, true);
+                entry.setUint16(10, 0, true);
+                entry.setUint16(12, time, true);
+                entry.setUint16(14, date, true);
+                entry.setUint32(16, crc, true);
+                entry.setUint32(20, size, true);
+                entry.setUint32(24, size, true);
+                entry.setUint16(28, name.length, true);
+                entry.setUint32(42, offset, true);    // local header offset (other fields 0)
+                central.push(entry, name);
+
+                offset += 30 + name.length + size;
+            }
+
+            const centralSize = central.reduce((n, p) => n + p.byteLength, 0);
+            const end = new DataView(new ArrayBuffer(22));
+            end.setUint32(0, 0x06054b50, true);       // end of central directory
+            end.setUint16(8, files.length, true);
+            end.setUint16(10, files.length, true);
+            end.setUint32(12, centralSize, true);
+            end.setUint32(16, offset, true);
+
+            return new Blob([...parts, ...central, end], { type: 'application/zip' });
+        }
+
+        // ---- src/ui/export.js ----
+        // Saved-walls export: a zip of every wall's overlay and mockup PNGs plus the inventory
+        // image, and the inventory image on its own (Download PNG while the inventory is shown).
+
+        const INVENTORY_DPR = 2;
+
+        function localDate(d) {
+            const pad = (n) => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        }
+
+        async function blobBytes(blob) {
+            return new Uint8Array(await blob.arrayBuffer());
+        }
+
+        function inventoryColors() {
+            return { c1: state.colorTile1, c2: state.colorTile2 };
+        }
+
+        function inventoryCanvas(total, date) {
+            const { width, height } = inventoryImageSize(total);
+            const c = document.createElement('canvas');
+            c.width = width * INVENTORY_DPR;
+            c.height = height * INVENTORY_DPR;
+            drawInventoryImage(c.getContext('2d'), total, inventoryColors(), date, INVENTORY_DPR);
+            return c;
+        }
+
+        // Runs an export with the button disabled and relabelled (its <span>, keeping the icon),
+        // restoring it afterwards. data-busy keeps syncInventoryMode from re-enabling it.
+        async function withBusyButton(button, label, work) {
+            const target = button.querySelector('span') || button;
+            const original = target.textContent;
+            button.disabled = true;
+            button.dataset.busy = '1';
+            target.textContent = label;
+            try {
+                await work();
+            } catch (err) {
+                console.error('Export failed:', err);
+                alert(`Export failed: ${err.message}`);
+            } finally {
+                delete button.dataset.busy;
+                button.disabled = false;
+                target.textContent = original;
+            }
+        }
+
+        // Each saved wall is rendered in the current shared colors, once with the sheet overlay and
+        // once as the clean mockup. Names that collide (same wall name and size) get -2, -3, ….
+        function exportSavedWallsZip(button) {
+            const total = pooledTakeoff();
+            if (!total.walls.length) return;
+            return withBusyButton(button, 'Exporting…', async () => {
+                const date = new Date();
+                const files = [];
+                const used = new Set();
+                const unique = (name) => {
+                    let candidate = name;
+                    for (let n = 2; used.has(candidate); n++) candidate = name.replace(/\.png$/, `-${n}.png`);
+                    used.add(candidate);
+                    return candidate;
+                };
+                for (const w of total.walls) {
+                    for (const overlay of [true, false]) {
+                        const s = normalizeState({ ...state, ...w.settings, showSheetOverlay: overlay });
+                        const { grid, inventory } = computeWall(s);
+                        const wall = { name: w.name, unsaved: false };
+                        const blob = await canvasToBlob(renderExportCanvas(s, grid, inventory, wall));
+                        files.push({ name: unique(exportFileName(s, wall)), data: await blobBytes(blob) });
+                    }
+                }
+                files.push({ name: unique('inventory.png'), data: await blobBytes(await canvasToBlob(inventoryCanvas(total, date))) });
+                downloadBlob(makeZip(files, date), `saved-walls_${localDate(date)}.zip`);
+            });
+        }
+
+        function downloadInventoryImage(button) {
+            const total = pooledTakeoff();
+            if (!total.walls.length) return;
+            return withBusyButton(button, 'Rendering…', async () => {
+                const date = new Date();
+                downloadBlob(await canvasToBlob(inventoryCanvas(total, date)), `inventory_${localDate(date)}.png`);
+            });
         }
 
         // ---- src/app.js ----
@@ -2390,9 +2759,28 @@
                 c.height = Math.round(lastView.cssHeight * dpr);
             }
 
-            renderCanvas(tileCtx, lastView, lastGrid, lastInventory, state, currentWall(state));
+            if (isInventoryShown()) renderInventoryView(dpr);
+            else renderCanvas(tileCtx, lastView, lastGrid, lastInventory, state, currentWall(state));
             zoomLabel.textContent = Math.round(nav.zoom * 100) + '%';
             drawHud();
+        }
+
+        // Inventory view: the saved-walls inventory image, fitted and centered on the canvas (never
+        // enlarged past 1.5×). No zoom, pan or HUD.
+        const INVENTORY_MAX_SCALE = 1.5;
+
+        function renderInventoryView(dpr) {
+            const total = pooledTakeoff();
+            const size = inventoryImageSize(total);
+            const scale = Math.max(0.1, Math.min(INVENTORY_MAX_SCALE,
+                (lastView.cssWidth - FIT_PADDING_PX * 2) / size.width,
+                (lastView.cssHeight - FIT_PADDING_PX * 2) / size.height));
+            tileCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            tileCtx.fillStyle = CANVAS_BG;
+            tileCtx.fillRect(0, 0, lastView.cssWidth, lastView.cssHeight);
+            const x = Math.round((lastView.cssWidth - size.width * scale) / 2);
+            const y = Math.round((lastView.cssHeight - size.height * scale) / 2);
+            drawInventoryImage(tileCtx, total, inventoryColors(), new Date(), dpr, { x, y, scale });
         }
 
         // --- Export Canvas as High-Res PNG ---
@@ -2506,329 +2894,6 @@
             } else {
                 closeConfigModal();
             }
-        }
-
-        // ---- src/inventory-image.js ----
-        // Inventory image for the saved walls: one row per wall, the pooled total, and the
-        // minimum / +5% / +10% sheet reserves per color. Drawn in CSS px; the caller sizes the
-        // canvas from inventoryImageSize() × dpr.
-
-        const IMG_WIDTH = 760;
-        const PAD = 24;
-        const ROW_H = 20;
-        const HEADER_H = 92;      // title, date, color legend
-        const TABLE_HEAD_H = 26;
-        const RESERVE_TOP_GAP = 34;
-        const RESERVE_ROWS = 3;
-        const FOOTER_H = 56;
-
-        const RESERVE_LEVELS = [0, 0.05, 0.10];
-
-        // Sheets with a reserve, rounded up to whole sheets
-        function withReserve(sheets, level) {
-            return Math.ceil(sheets * (1 + level) - 1e-9);
-        }
-
-        function inventoryImageSize(total) {
-            const rows = total.walls.length + 1; // + pooled total
-            const height = PAD + HEADER_H + TABLE_HEAD_H + rows * ROW_H + RESERVE_TOP_GAP + TABLE_HEAD_H + RESERVE_ROWS * ROW_H + FOOTER_H + PAD;
-            return { width: IMG_WIDTH, height };
-        }
-
-        // total: pooledTakeoff() from ui/takeoff.js; colors: { c1, c2 } hex; date: Date
-        function drawInventoryImage(ctx, total, colors, date, dpr) {
-            const { width, height } = inventoryImageSize(total);
-            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-            ctx.fillStyle = '#0f172a';
-            ctx.fillRect(0, 0, width, height);
-            ctx.textBaseline = 'middle';
-
-            const text = (str, x, y, { font = '11px JetBrains Mono, monospace', color = '#cbd5e1', align = 'left', maxWidth } = {}) => {
-                ctx.font = font;
-                ctx.fillStyle = color;
-                ctx.textAlign = align;
-                if (maxWidth) {
-                    let s = str;
-                    while (s.length > 1 && ctx.measureText(s).width > maxWidth) s = s.slice(0, -2) + '…';
-                    ctx.fillText(s, x, y);
-                }
-                else ctx.fillText(str, x, y);
-            };
-            const swatch = (x, y, hex) => {
-                ctx.fillStyle = hex;
-                ctx.beginPath();
-                ctx.arc(x, y, 6, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.strokeStyle = '#ffffff';
-                ctx.lineWidth = 1;
-                ctx.stroke();
-            };
-
-            // Header
-            let y = PAD + 10;
-            text('TILE INVENTORY · SAVED WALLS', PAD, y, { font: 'bold 16px Inter, sans-serif', color: '#ffffff' });
-            y += 22;
-            text(`${date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}  ·  Merola Metro Rhombus, 36 tiles per sheet  ·  ${total.walls.length} walls`, PAD, y, { color: '#94a3b8' });
-            y += 26;
-            swatch(PAD + 6, y, colors.c1);
-            text(`Color 1 ${colors.c1.toUpperCase()}`, PAD + 18, y, { font: 'bold 11px JetBrains Mono, monospace', color: '#f59e0b' });
-            swatch(PAD + 186, y, colors.c2);
-            text(`Color 2 ${colors.c2.toUpperCase()}`, PAD + 198, y, { font: 'bold 11px JetBrains Mono, monospace', color: '#38bdf8' });
-
-            // Per-wall table. Columns: name, size, sheets on wall, then sheets/left per color.
-            const right = width - PAD;
-            const cols = [
-                { label: 'Wall', x: PAD, align: 'left' },
-                { label: 'Size (tiled)', x: PAD + 220, align: 'left' },
-                { label: 'On wall', x: PAD + 428, align: 'right' },
-                { label: 'C1 sheets', x: PAD + 508, align: 'right' },
-                { label: 'C1 left', x: PAD + 568, align: 'right' },
-                { label: 'C2 sheets', x: PAD + 648, align: 'right' },
-                { label: 'C2 left', x: right, align: 'right' }
-            ];
-            const headerRow = (yy, labels) => {
-                ctx.fillStyle = '#1e293b';
-                ctx.fillRect(PAD - 8, yy - TABLE_HEAD_H / 2, width - 2 * PAD + 16, TABLE_HEAD_H);
-                labels.forEach(([label, x, align]) => text(label, x, yy, { font: 'bold 10px Inter, sans-serif', color: '#94a3b8', align }));
-            };
-            const rowBand = (yy, i) => {
-                if (i % 2 === 1) {
-                    ctx.fillStyle = 'rgba(30, 41, 59, 0.45)';
-                    ctx.fillRect(PAD - 8, yy - ROW_H / 2, width - 2 * PAD + 16, ROW_H);
-                }
-            };
-
-            y = PAD + HEADER_H + TABLE_HEAD_H / 2;
-            headerRow(y, cols.map(c => [c.label, c.x, c.align]));
-            y += TABLE_HEAD_H / 2 + ROW_H / 2;
-
-            total.walls.forEach((w, i) => {
-                const s = w.settings;
-                rowBand(y, i);
-                const cells = [
-                    w.name,
-                    `${s.wallWidthInches}″ × ${s.wallTotalHeightInches}″ (${s.tiledHeightInches}″)`,
-                    String(w.inv.totalSheets),
-                    String(w.inv.buyC1),
-                    String(w.inv.leftoverC1),
-                    String(w.inv.buyC2),
-                    String(w.inv.leftoverC2)
-                ];
-                cells.forEach((c, j) => text(c, cols[j].x, y, {
-                    align: cols[j].align,
-                    color: j === 3 ? '#fbbf24' : j === 5 ? '#7dd3fc' : '#cbd5e1',
-                    maxWidth: j === 0 ? 210 : undefined
-                }));
-                y += ROW_H;
-            });
-
-            // Pooled total
-            ctx.strokeStyle = '#334155';
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.moveTo(PAD - 8, y - ROW_H / 2 + 0.5);
-            ctx.lineTo(width - PAD + 8, y - ROW_H / 2 + 0.5);
-            ctx.stroke();
-            const bold = 'bold 11px JetBrains Mono, monospace';
-            text('Total (pooled)', cols[0].x, y, { font: bold, color: '#ffffff' });
-            text(String(total.sheetsOnWalls), cols[2].x, y, { font: bold, color: '#ffffff', align: 'right' });
-            text(String(total.c1.buy), cols[3].x, y, { font: bold, color: '#fbbf24', align: 'right' });
-            text(String(total.c1.leftover), cols[4].x, y, { font: bold, color: '#ffffff', align: 'right' });
-            text(String(total.c2.buy), cols[5].x, y, { font: bold, color: '#7dd3fc', align: 'right' });
-            text(String(total.c2.leftover), cols[6].x, y, { font: bold, color: '#ffffff', align: 'right' });
-            y += ROW_H / 2;
-
-            // Reserves on the pooled minimum, rounded up per color
-            y += RESERVE_TOP_GAP - 8;
-            text('SHEETS TO HAVE ON HAND', PAD, y - 12, { font: 'bold 11px Inter, sans-serif', color: '#ffffff' });
-            y += TABLE_HEAD_H / 2;
-            const rcols = [
-                ['', PAD, 'left'],
-                ['Color 1', PAD + 300, 'right'],
-                ['Color 2', PAD + 440, 'right'],
-                ['Total', PAD + 580, 'right']
-            ];
-            headerRow(y, rcols);
-            y += TABLE_HEAD_H / 2 + ROW_H / 2;
-            RESERVE_LEVELS.forEach((level, i) => {
-                rowBand(y, i);
-                const c1 = withReserve(total.c1.buy, level);
-                const c2 = withReserve(total.c2.buy, level);
-                const extra = (n, base) => level ? `${n} (+${n - base})` : String(n);
-                text(level ? `+${Math.round(level * 100)}% reserve` : 'Minimum', rcols[0][1], y, { font: level ? undefined : bold, color: '#ffffff' });
-                text(extra(c1, total.c1.buy), rcols[1][1], y, { color: '#fbbf24', align: 'right' });
-                text(extra(c2, total.c2.buy), rcols[2][1], y, { color: '#7dd3fc', align: 'right' });
-                text(extra(c1 + c2, total.c1.buy + total.c2.buy), rcols[3][1], y, { color: '#ffffff', align: 'right' });
-                y += ROW_H;
-            });
-
-            // Footer: how the numbers are made
-            y += 12;
-            const note = { font: '10px Inter, sans-serif', color: '#64748b' };
-            text('Sheets per color = majority sheets + extra sheets for hand-swaps − whole sheets\' worth of spare tiles (0–35 tiles left).', PAD, y, note);
-            text('The total is pooled: one wall\'s spares cover another\'s swaps, so it can be less than the sum of the walls.', PAD, y + 15, note);
-            text('Reserves are added to the pooled minimum and rounded up to whole sheets per color.', PAD, y + 30, note);
-        }
-
-        // ---- src/zip.js ----
-        // Minimal zip writer: stored entries (no compression; PNGs are already compressed), so the
-        // single-file build needs no library and works offline.
-
-        const CRC_TABLE = (() => {
-            const table = new Uint32Array(256);
-            for (let n = 0; n < 256; n++) {
-                let c = n;
-                for (let k = 0; k < 8; k++) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
-                table[n] = c >>> 0;
-            }
-            return table;
-        })();
-
-        function crc32(bytes) {
-            let c = 0xffffffff;
-            for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
-            return (c ^ 0xffffffff) >>> 0;
-        }
-
-        // MS-DOS date/time fields used by zip headers
-        function dosDateTime(d) {
-            const time = (d.getHours() << 11) | (d.getMinutes() << 5) | Math.floor(d.getSeconds() / 2);
-            const date = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
-            return { time, date };
-        }
-
-        // files: [{ name, data: Uint8Array }] → Blob (application/zip). Names are stored as UTF-8.
-        function makeZip(files, when = new Date()) {
-            const encoder = new TextEncoder();
-            const { time, date } = dosDateTime(when);
-            const parts = [];
-            const central = [];
-            let offset = 0;
-
-            for (const file of files) {
-                const name = encoder.encode(file.name);
-                const crc = crc32(file.data);
-                const size = file.data.length;
-
-                const local = new DataView(new ArrayBuffer(30));
-                local.setUint32(0, 0x04034b50, true); // local file header
-                local.setUint16(4, 20, true);         // version needed
-                local.setUint16(6, 0x0800, true);     // flags: UTF-8 names
-                local.setUint16(8, 0, true);          // method: stored
-                local.setUint16(10, time, true);
-                local.setUint16(12, date, true);
-                local.setUint32(14, crc, true);
-                local.setUint32(18, size, true);
-                local.setUint32(22, size, true);
-                local.setUint16(26, name.length, true);
-                local.setUint16(28, 0, true);
-                parts.push(local, name, file.data);
-
-                const entry = new DataView(new ArrayBuffer(46));
-                entry.setUint32(0, 0x02014b50, true); // central directory header
-                entry.setUint16(4, 20, true);         // version made by
-                entry.setUint16(6, 20, true);         // version needed
-                entry.setUint16(8, 0x0800, true);
-                entry.setUint16(10, 0, true);
-                entry.setUint16(12, time, true);
-                entry.setUint16(14, date, true);
-                entry.setUint32(16, crc, true);
-                entry.setUint32(20, size, true);
-                entry.setUint32(24, size, true);
-                entry.setUint16(28, name.length, true);
-                entry.setUint32(42, offset, true);    // local header offset (other fields 0)
-                central.push(entry, name);
-
-                offset += 30 + name.length + size;
-            }
-
-            const centralSize = central.reduce((n, p) => n + p.byteLength, 0);
-            const end = new DataView(new ArrayBuffer(22));
-            end.setUint32(0, 0x06054b50, true);       // end of central directory
-            end.setUint16(8, files.length, true);
-            end.setUint16(10, files.length, true);
-            end.setUint32(12, centralSize, true);
-            end.setUint32(16, offset, true);
-
-            return new Blob([...parts, ...central, end], { type: 'application/zip' });
-        }
-
-        // ---- src/ui/export.js ----
-        // Saved-walls export: a zip of every wall's overlay and mockup PNGs plus the inventory
-        // image, and the inventory image on its own.
-
-        const INVENTORY_DPR = 2;
-
-        function localDate(d) {
-            const pad = (n) => String(n).padStart(2, '0');
-            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-        }
-
-        async function blobBytes(blob) {
-            return new Uint8Array(await blob.arrayBuffer());
-        }
-
-        function inventoryCanvas(total, date) {
-            const { width, height } = inventoryImageSize(total);
-            const c = document.createElement('canvas');
-            c.width = width * INVENTORY_DPR;
-            c.height = height * INVENTORY_DPR;
-            drawInventoryImage(c.getContext('2d'), total, { c1: state.colorTile1, c2: state.colorTile2 }, date, INVENTORY_DPR);
-            return c;
-        }
-
-        // Runs an export with the button disabled and relabelled, restoring it afterwards
-        async function withBusyButton(button, label, work) {
-            const original = button.textContent;
-            button.disabled = true;
-            button.textContent = label;
-            try {
-                await work();
-            } catch (err) {
-                console.error('Export failed:', err);
-                alert(`Export failed: ${err.message}`);
-            } finally {
-                button.disabled = false;
-                button.textContent = original;
-            }
-        }
-
-        // Each saved wall is rendered in the current shared colors, once with the sheet overlay and
-        // once as the clean mockup. Names that collide (same wall name and size) get -2, -3, ….
-        function exportSavedWallsZip(button) {
-            const total = pooledTakeoff();
-            if (!total.walls.length) return;
-            return withBusyButton(button, 'Exporting…', async () => {
-                const date = new Date();
-                const files = [];
-                const used = new Set();
-                const unique = (name) => {
-                    let candidate = name;
-                    for (let n = 2; used.has(candidate); n++) candidate = name.replace(/\.png$/, `-${n}.png`);
-                    used.add(candidate);
-                    return candidate;
-                };
-                for (const w of total.walls) {
-                    for (const overlay of [true, false]) {
-                        const s = normalizeState({ ...state, ...w.settings, showSheetOverlay: overlay });
-                        const { grid, inventory } = computeWall(s);
-                        const wall = { name: w.name, unsaved: false };
-                        const blob = await canvasToBlob(renderExportCanvas(s, grid, inventory, wall));
-                        files.push({ name: unique(exportFileName(s, wall)), data: await blobBytes(blob) });
-                    }
-                }
-                files.push({ name: unique('inventory.png'), data: await blobBytes(await canvasToBlob(inventoryCanvas(total, date))) });
-                downloadBlob(makeZip(files, date), `saved-walls_${localDate(date)}.zip`);
-            });
-        }
-
-        function downloadInventoryImage(button) {
-            const total = pooledTakeoff();
-            if (!total.walls.length) return;
-            return withBusyButton(button, 'Rendering…', async () => {
-                const date = new Date();
-                downloadBlob(await canvasToBlob(inventoryCanvas(total, date)), `inventory_${localDate(date)}.png`);
-            });
         }
 
         // ---- src/ui/controls.js ----
@@ -2982,7 +3047,9 @@
             document.getElementById('resetDefaultsBtn').addEventListener('click', resetDefaults);
 
             // Download PNG
-            document.getElementById('downloadPngBtn').addEventListener('click', downloadCanvasPNG);
+            // Download PNG: the inventory when it's shown, otherwise the wall
+            const downloadBtn = document.getElementById('downloadPngBtn');
+            downloadBtn.addEventListener('click', () => isInventoryShown() ? downloadInventoryImage(downloadBtn) : downloadCanvasPNG());
 
             // Canvas pointer: click flips a tile, Shift+drag pans, wheel/pinch zooms
             bindCanvasPointer();
@@ -2997,9 +3064,7 @@
             document.getElementById('addWallToTakeoffBtn').addEventListener('click', saveCurrentWallToTakeoff);
             bindSavedWallsList();
             const zipBtn = document.getElementById('exportWallsZipBtn');
-            const inventoryBtn = document.getElementById('exportInventoryBtn');
             zipBtn.addEventListener('click', () => exportSavedWallsZip(zipBtn));
-            inventoryBtn.addEventListener('click', () => downloadInventoryImage(inventoryBtn));
 
             // Config Modal
             document.getElementById('openConfigModalBtn').addEventListener('click', openConfigModal);

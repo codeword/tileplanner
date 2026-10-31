@@ -6,7 +6,7 @@ import { DEFAULTS, VOID_SNAP_INCHES, commitVoidClip, setState, snapInches, state
 import { applyConfigJson, closeConfigModal, copyConfigJson, openConfigModal } from './config-modal.js';
 import { bindCanvasPointer, canvasCenter, deleteVoid, zoomAt } from './pointer.js';
 import { downloadInventoryImage, exportSavedWallsZip } from './export.js';
-import { bindSavedWallsList, saveCurrentWallToTakeoff, unlinkWall } from './takeoff.js';
+import { bindSavedWallsList, isInventoryShown, saveCurrentWallToTakeoff, unlinkWall } from './takeoff.js';
 
 const inputWidth = document.getElementById('wallWidthInches');
 const inputTotalHeight = document.getElementById('wallTotalHeightInches');
@@ -156,7 +156,9 @@ export function bindInputs() {
     document.getElementById('resetDefaultsBtn').addEventListener('click', resetDefaults);
 
     // Download PNG
-    document.getElementById('downloadPngBtn').addEventListener('click', downloadCanvasPNG);
+    // Download PNG: the inventory when it's shown, otherwise the wall
+    const downloadBtn = document.getElementById('downloadPngBtn');
+    downloadBtn.addEventListener('click', () => isInventoryShown() ? downloadInventoryImage(downloadBtn) : downloadCanvasPNG());
 
     // Canvas pointer: click flips a tile, Shift+drag pans, wheel/pinch zooms
     bindCanvasPointer();
@@ -171,9 +173,7 @@ export function bindInputs() {
     document.getElementById('addWallToTakeoffBtn').addEventListener('click', saveCurrentWallToTakeoff);
     bindSavedWallsList();
     const zipBtn = document.getElementById('exportWallsZipBtn');
-    const inventoryBtn = document.getElementById('exportInventoryBtn');
     zipBtn.addEventListener('click', () => exportSavedWallsZip(zipBtn));
-    inventoryBtn.addEventListener('click', () => downloadInventoryImage(inventoryBtn));
 
     // Config Modal
     document.getElementById('openConfigModalBtn').addEventListener('click', openConfigModal);
