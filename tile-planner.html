@@ -991,16 +991,15 @@
                 (area.height - FIT_PADDING_PX * 2 - extraHeightPx) / boundingHeightInches
             )));
 
-            // Card placement is decided at the fitted scale, so zooming never moves it
+            // The card always sits in a strip below the bottom margin, never on the wall. Its size
+            // is in CSS px, so zooming doesn't change it.
             const cardSpacePx = CARD_HEIGHT_PX + CARD_MARGIN_PX * 2;
-            let fitScale = fitFor(0);
-            const cardBelow = (s.wallTotalHeightInches - s.tiledHeightInches) * fitScale < cardSpacePx;
-            if (cardBelow) fitScale = fitFor(cardSpacePx);
+            const fitScale = fitFor(cardSpacePx);
             const scale = fitScale * (nav ? nav.zoom : 1);
 
             const planHeight = Math.round(boundingHeightInches * scale);
             const contentWidth = Math.round(boundingWidthInches * scale);
-            const contentHeight = planHeight + (cardBelow ? cardSpacePx : 0);
+            const contentHeight = planHeight + cardSpacePx;
             const cssWidth = nav ? area.width : contentWidth;
             const cssHeight = nav ? area.height : contentHeight;
             const contentX = nav ? Math.round((cssWidth - contentWidth) / 2 + nav.panX) : 0;
@@ -1011,10 +1010,12 @@
             const wallRightX = Math.round(wallLeftX + (s.wallWidthInches * scale));
             const wallCeilingY = contentY + Math.round(MARGIN_INCHES * scale);
 
-            const card = cardBelow
-                ? { x: contentX + CARD_MARGIN_PX, y: contentY + planHeight + CARD_MARGIN_PX, width: Math.min(CARD_WIDTH_PX, contentWidth - CARD_MARGIN_PX * 2) }
-                : { x: wallLeftX + CARD_MARGIN_PX, y: wallCeilingY + CARD_MARGIN_PX, width: Math.min(CARD_WIDTH_PX, wallRightX - wallLeftX - CARD_MARGIN_PX * 2) };
-            card.height = CARD_HEIGHT_PX;
+            const card = {
+                x: contentX + CARD_MARGIN_PX,
+                y: contentY + planHeight + CARD_MARGIN_PX,
+                width: Math.min(CARD_WIDTH_PX, contentWidth - CARD_MARGIN_PX * 2),
+                height: CARD_HEIGHT_PX
+            };
 
             return {
                 scale,      // CSS px per inch
@@ -1065,28 +1066,38 @@
             // everything outside the wall in CANVAS_BG, and no planning marks (ghost tiles, sheet
             // outlines, wall lines, void outlines/labels/badges). The spec card stays.
             const clean = !s.showSheetOverlay;
+            // The PNG export leaves everything off the wall transparent (margins, card strip, and
+            // in the clean mockup the voids), where the screen shows the background or paint
+            const transparent = !view.onScreen;
 
             useScreenSpace();
 
             // 0. Canvas area outside the content (only visible on screen when zoomed out or panned)
             const { content } = view;
-            ctx.fillStyle = CANVAS_BG;
-            ctx.fillRect(0, 0, view.cssWidth, view.cssHeight);
+            if (transparent) {
+                ctx.clearRect(0, 0, view.cssWidth, view.cssHeight);
+            }
+            else {
+                ctx.fillStyle = CANVAS_BG;
+                ctx.fillRect(0, 0, view.cssWidth, view.cssHeight);
+            }
             ctx.save();
             ctx.beginPath();
             ctx.rect(content.x, content.y, content.width, content.height);
             ctx.clip(); // tiles overhanging past the margins stay hidden, as before
 
             // 1. Fill the content (wall + margins) with painted wall color
-            ctx.fillStyle = clean ? CANVAS_BG : s.colorPaint;
-            ctx.fillRect(content.x, content.y, content.width, content.height);
+            if (!transparent) {
+                ctx.fillStyle = clean ? CANVAS_BG : s.colorPaint;
+                ctx.fillRect(content.x, content.y, content.width, content.height);
+            }
 
             // 2. Draw wall drywall fill
             ctx.fillStyle = s.colorPaint;
             ctx.fillRect(wallLeftX, wallCeilingY, renderedWallWidth, renderedTotalHeight);
 
             // Light wash over everything outside the wall, so the wall edge reads clearly
-            if (!clean) {
+            if (!clean && !transparent) {
                 ctx.fillStyle = OUTSIDE_WALL_WASH;
                 ctx.beginPath();
                 ctx.rect(content.x, content.y, content.width, content.height);
@@ -1138,13 +1149,16 @@
             }
             ctx.restore();
 
-            // Voids are solid, covering the tile parts inside them
+            // Voids are solid (holes in the PNG), covering the tile parts inside them
             if (clean) {
+                ctx.save();
+                if (transparent) ctx.globalCompositeOperation = 'destination-out';
                 ctx.fillStyle = CANVAS_BG;
                 for (const stored of s.voids) {
                     const v = clipRectToWall(stored, s);
                     if (v && !v.measureOnly) ctx.fillRect(v.x, v.y, v.w, v.h);
                 }
+                ctx.restore();
             }
 
             // 4. Sheet outlines and badges
@@ -2123,7 +2137,7 @@
         }
 
         function saveCurrentWallToTakeoff() {
-            const name = `Wall ${savedWalls.length + 1} (${state.wallWidthInches}″ × ${state.wallTotalHeightInches}″)`;
+            const name = `Wall ${savedWalls.length + 1}`;
             const settings = wallSettings(state);
             if (lastInventory && lastState === state) wallCounts.set(settings, lastInventory);
             linkedWall = { name, settings };
@@ -2375,13 +2389,20 @@
                 }
                 const url = URL.createObjectURL(blob);
                 const link = document.createElement('a');
-                link.download = `tile-installation-plan-${state.wallWidthInches}x${state.wallTotalHeightInches}-seed${state.seed}.png`;
+                link.download = exportFileName(state, currentWall(state));
                 link.href = url;
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
                 setTimeout(() => URL.revokeObjectURL(url), 0);
             }, 'image/png');
+        }
+
+        // <wall name>_<W>x<H>_<overlay|mockup>.png. The name is the linked saved wall's (even with
+        // unsaved changes) or "unsaved-wall", with runs of anything but letters, digits, . _ - as "-".
+        function exportFileName(s, wall) {
+            const name = (wall ? wall.name : 'unsaved-wall').replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'wall';
+            return `${name}_${s.wallWidthInches}x${s.wallTotalHeightInches}_${s.showSheetOverlay ? 'overlay' : 'mockup'}.png`;
         }
 
         // Re-render when the window moves to a screen with a different pixel density

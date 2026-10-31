@@ -22,28 +22,38 @@ export function renderCanvas(ctx, view, grid, inventory, s, wall = null) {
     // everything outside the wall in CANVAS_BG, and no planning marks (ghost tiles, sheet
     // outlines, wall lines, void outlines/labels/badges). The spec card stays.
     const clean = !s.showSheetOverlay;
+    // The PNG export leaves everything off the wall transparent (margins, card strip, and
+    // in the clean mockup the voids), where the screen shows the background or paint
+    const transparent = !view.onScreen;
 
     useScreenSpace();
 
     // 0. Canvas area outside the content (only visible on screen when zoomed out or panned)
     const { content } = view;
-    ctx.fillStyle = CANVAS_BG;
-    ctx.fillRect(0, 0, view.cssWidth, view.cssHeight);
+    if (transparent) {
+        ctx.clearRect(0, 0, view.cssWidth, view.cssHeight);
+    }
+    else {
+        ctx.fillStyle = CANVAS_BG;
+        ctx.fillRect(0, 0, view.cssWidth, view.cssHeight);
+    }
     ctx.save();
     ctx.beginPath();
     ctx.rect(content.x, content.y, content.width, content.height);
     ctx.clip(); // tiles overhanging past the margins stay hidden, as before
 
     // 1. Fill the content (wall + margins) with painted wall color
-    ctx.fillStyle = clean ? CANVAS_BG : s.colorPaint;
-    ctx.fillRect(content.x, content.y, content.width, content.height);
+    if (!transparent) {
+        ctx.fillStyle = clean ? CANVAS_BG : s.colorPaint;
+        ctx.fillRect(content.x, content.y, content.width, content.height);
+    }
 
     // 2. Draw wall drywall fill
     ctx.fillStyle = s.colorPaint;
     ctx.fillRect(wallLeftX, wallCeilingY, renderedWallWidth, renderedTotalHeight);
 
     // Light wash over everything outside the wall, so the wall edge reads clearly
-    if (!clean) {
+    if (!clean && !transparent) {
         ctx.fillStyle = OUTSIDE_WALL_WASH;
         ctx.beginPath();
         ctx.rect(content.x, content.y, content.width, content.height);
@@ -95,13 +105,16 @@ export function renderCanvas(ctx, view, grid, inventory, s, wall = null) {
     }
     ctx.restore();
 
-    // Voids are solid, covering the tile parts inside them
+    // Voids are solid (holes in the PNG), covering the tile parts inside them
     if (clean) {
+        ctx.save();
+        if (transparent) ctx.globalCompositeOperation = 'destination-out';
         ctx.fillStyle = CANVAS_BG;
         for (const stored of s.voids) {
             const v = clipRectToWall(stored, s);
             if (v && !v.measureOnly) ctx.fillRect(v.x, v.y, v.w, v.h);
         }
+        ctx.restore();
     }
 
     // 4. Sheet outlines and badges

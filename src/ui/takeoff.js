@@ -83,7 +83,7 @@ function countsFor(settings) {
 }
 
 export function saveCurrentWallToTakeoff() {
-    const name = `Wall ${savedWalls.length + 1} (${state.wallWidthInches}″ × ${state.wallTotalHeightInches}″)`;
+    const name = `Wall ${savedWalls.length + 1}`;
     const settings = wallSettings(state);
     if (lastInventory && lastState === state) wallCounts.set(settings, lastInventory);
     linkedWall = { name, settings };

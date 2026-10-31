@@ -79,13 +79,20 @@ export function downloadCanvasPNG() {
         }
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
-        link.download = `tile-installation-plan-${state.wallWidthInches}x${state.wallTotalHeightInches}-seed${state.seed}.png`;
+        link.download = exportFileName(state, currentWall(state));
         link.href = url;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         setTimeout(() => URL.revokeObjectURL(url), 0);
     }, 'image/png');
+}
+
+// <wall name>_<W>x<H>_<overlay|mockup>.png. The name is the linked saved wall's (even with
+// unsaved changes) or "unsaved-wall", with runs of anything but letters, digits, . _ - as "-".
+function exportFileName(s, wall) {
+    const name = (wall ? wall.name : 'unsaved-wall').replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'wall';
+    return `${name}_${s.wallWidthInches}x${s.wallTotalHeightInches}_${s.showSheetOverlay ? 'overlay' : 'mockup'}.png`;
 }
 
 // Re-render when the window moves to a screen with a different pixel density

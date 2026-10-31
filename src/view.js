@@ -16,16 +16,15 @@ export function computeView(s, area, dpr, nav = null) {
         (area.height - FIT_PADDING_PX * 2 - extraHeightPx) / boundingHeightInches
     )));
 
-    // Card placement is decided at the fitted scale, so zooming never moves it
+    // The card always sits in a strip below the bottom margin, never on the wall. Its size
+    // is in CSS px, so zooming doesn't change it.
     const cardSpacePx = CARD_HEIGHT_PX + CARD_MARGIN_PX * 2;
-    let fitScale = fitFor(0);
-    const cardBelow = (s.wallTotalHeightInches - s.tiledHeightInches) * fitScale < cardSpacePx;
-    if (cardBelow) fitScale = fitFor(cardSpacePx);
+    const fitScale = fitFor(cardSpacePx);
     const scale = fitScale * (nav ? nav.zoom : 1);
 
     const planHeight = Math.round(boundingHeightInches * scale);
     const contentWidth = Math.round(boundingWidthInches * scale);
-    const contentHeight = planHeight + (cardBelow ? cardSpacePx : 0);
+    const contentHeight = planHeight + cardSpacePx;
     const cssWidth = nav ? area.width : contentWidth;
     const cssHeight = nav ? area.height : contentHeight;
     const contentX = nav ? Math.round((cssWidth - contentWidth) / 2 + nav.panX) : 0;
@@ -36,10 +35,12 @@ export function computeView(s, area, dpr, nav = null) {
     const wallRightX = Math.round(wallLeftX + (s.wallWidthInches * scale));
     const wallCeilingY = contentY + Math.round(MARGIN_INCHES * scale);
 
-    const card = cardBelow
-        ? { x: contentX + CARD_MARGIN_PX, y: contentY + planHeight + CARD_MARGIN_PX, width: Math.min(CARD_WIDTH_PX, contentWidth - CARD_MARGIN_PX * 2) }
-        : { x: wallLeftX + CARD_MARGIN_PX, y: wallCeilingY + CARD_MARGIN_PX, width: Math.min(CARD_WIDTH_PX, wallRightX - wallLeftX - CARD_MARGIN_PX * 2) };
-    card.height = CARD_HEIGHT_PX;
+    const card = {
+        x: contentX + CARD_MARGIN_PX,
+        y: contentY + planHeight + CARD_MARGIN_PX,
+        width: Math.min(CARD_WIDTH_PX, contentWidth - CARD_MARGIN_PX * 2),
+        height: CARD_HEIGHT_PX
+    };
 
     return {
         scale,      // CSS px per inch
