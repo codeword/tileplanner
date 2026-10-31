@@ -1,7 +1,7 @@
 // Takeoff bar and the saved-walls list.
 import { computeWall, lastInventory, lastState, scheduleRender } from '../app.js';
 import { sanitizeWallName } from '../config.js';
-import { SHEETS_PER_BOX, WASTE_FACTOR } from '../constants.js';
+import { settleColor } from '../inventory.js';
 import { WALL_KEYS, normalizeState, setState, state, wallSettings } from '../state.js';
 
 const statTotalSheets = document.getElementById('statTotalSheets');
@@ -18,18 +18,17 @@ const statSpares = document.getElementById('statSpares');
 
 // --- Pipeline stage 6: takeoff dashboard bar ---
 export function renderDashboard(inv) {
-    const boxes = (n) => `${n} ${n === 1 ? 'box' : 'boxes'}`;
     statTotalSheets.textContent = inv.totalSheets;
     statGridDims.textContent = `(${inv.gridCols} cols × ${inv.gridRows} rows)`;
-    statC1Sheets.textContent = `${inv.c1Sheets} sheets`;
-    statC1Detail.textContent = `+${inv.extraC1} extra · ${boxes(inv.boxesC1)}`;
-    statC2Sheets.textContent = `${inv.c2Sheets} sheets`;
-    statC2Detail.textContent = `+${inv.extraC2} extra · ${boxes(inv.boxesC2)}`;
+    statC1Sheets.textContent = `${inv.buyC1} sheets`;
+    statC1Detail.textContent = `${inv.leftoverC1} tiles left`;
+    statC2Sheets.textContent = `${inv.buyC2} sheets`;
+    statC2Detail.textContent = `${inv.leftoverC2} tiles left`;
     statHandSwaps.textContent = `${inv.handSwaps} tiles`;
     statSwappedC1.textContent = inv.swappedC1;
     statSwappedC2.textContent = inv.swappedC2;
     statSpares.textContent = `${inv.spareC1} C1, ${inv.spareC2} C2`;
-    statCartons.textContent = `${boxes(inv.boxes)} (${inv.boxesC1} C1 + ${inv.boxesC2} C2)`;
+    statCartons.textContent = `${inv.buy} sheets (${inv.buyC1} C1 + ${inv.buyC2} C2)`;
 }
 
 // --- Multi-wall takeoff ---
@@ -118,14 +117,14 @@ function renderSavedWallsList() {
     let aggSwaps = 0;
     let aggSwapsC1 = 0;
     let aggSwapsC2 = 0;
-    let aggExtraC1 = 0;
-    let aggExtraC2 = 0;
+    let aggBalanceC1 = 0;
+    let aggBalanceC2 = 0;
 
     savedWalls.forEach((w, idx) => {
         const inv = countsFor(w.settings);
         const voidCount = w.settings.voids.filter(v => !v.measureOnly).length;
-        aggExtraC1 += inv.extraC1;
-        aggExtraC2 += inv.extraC2;
+        aggBalanceC1 += inv.balanceC1;
+        aggBalanceC2 += inv.balanceC2;
         aggSheets += inv.totalSheets;
         aggC1 += inv.c1Sheets;
         aggC2 += inv.c2Sheets;
@@ -141,7 +140,8 @@ function renderSavedWallsList() {
                     <span data-drag-handle class="text-slate-600 hover:text-slate-400 cursor-grab select-none leading-4 touch-none" title="Drag to reorder">⋮⋮</span>
                     <div class="min-w-0">
                         <button type="button" data-action="rename" class="font-medium text-slate-200 hover:text-cyan-300 text-left truncate max-w-full" title="Click to rename">${escapeHtml(w.name)}</button>${unsaved ? '<span class="text-amber-400 text-[10px] font-mono ml-1">(unsaved)</span>' : ''}
-                        <span class="text-slate-500 block font-mono">C1: ${inv.c1Sheets}+${inv.extraC1} | C2: ${inv.c2Sheets}+${inv.extraC2} (${inv.totalSheets} sheets${voidCount ? `, ${voidCount} voids` : ''}${w.settings.invertColors ? ', inverted' : ''})</span>
+                        <span class="text-slate-300 block font-mono">C1: ${inv.buyC1} sheets, ${inv.leftoverC1} left | C2: ${inv.buyC2} sheets, ${inv.leftoverC2} left</span>
+                        <span class="text-slate-500 block font-mono">${inv.totalSheets} sheets on wall${voidCount ? `, ${voidCount} voids` : ''}${w.settings.invertColors ? ', inverted' : ''}</span>
                         <span class="text-amber-400 text-[10px] block font-mono">Swaps: ${inv.handSwaps} (${inv.swappedC1} C1, ${inv.swappedC2} C2)</span>
                     </div>
                 </div>
@@ -154,13 +154,13 @@ function renderSavedWallsList() {
         `;
     });
 
-    // Boxes per color across all walls, with standard waste
-    const boxesC1 = Math.ceil(((aggC1 + aggExtraC1) * WASTE_FACTOR) / SHEETS_PER_BOX);
-    const boxesC2 = Math.ceil(((aggC2 + aggExtraC2) * WASTE_FACTOR) / SHEETS_PER_BOX);
+    // Pooled across walls: one wall's spares and pulled-out tiles cover another's swaps
+    const c1 = settleColor(aggC1, aggBalanceC1);
+    const c2 = settleColor(aggC2, aggBalanceC2);
     html += `
         <div class="pt-2 border-t border-slate-800 font-mono text-[11px] text-cyan-300">
-            <div>Total Takeoff: ${aggSheets} sheets (${boxesC1 + boxesC2} boxes: ${boxesC1} C1 + ${boxesC2} C2)</div>
-            <div class="text-slate-400">Total C1: ${aggC1}+${aggExtraC1} extra | Total C2: ${aggC2}+${aggExtraC2} extra</div>
+            <div>Total Takeoff: ${c1.buy + c2.buy} sheets (${c1.buy} C1 + ${c2.buy} C2)</div>
+            <div class="text-slate-400">Leftover: ${c1.leftover} C1, ${c2.leftover} C2 tiles | ${aggSheets} sheets on walls</div>
             <div class="text-amber-400 text-[10px]">Total Swaps: ${aggSwaps} (${aggSwapsC1} C1, ${aggSwapsC2} C2)</div>
         </div>
     `;

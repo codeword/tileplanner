@@ -351,8 +351,8 @@ function drawSpecCard(ctx, card, inv, s, wall) {
     ctx.fillText(`FADE: ${FADES[s.algorithm].label}  |  SEED: ${s.seed}`, left, y + 60, width - 24);
     ctx.fillText(`ZONES: Top ${topC} ${pct(zones.wallPct)} · Trans ${pct(zones.transPct)} · Bottom ${bottomC} ${pct(zones.floorPct)}  |  Rogue ${pct(s.outlierPct)}  |  Invert ${s.invertColors ? 'on' : 'off'}`, left, y + 76, width - 24);
 
-    // One row per color: swatch, hex, sheets, extra sheets, boxes
-    const colorRow = (rowY, hex, name, accent, sheets, extra, boxes) => {
+    // One row per color: swatch, hex, sheets to order (after extras and spares), leftover
+    const colorRow = (rowY, hex, name, accent, buy, leftover) => {
         ctx.fillStyle = hex;
         ctx.beginPath();
         ctx.arc(left + 6, rowY + 5, 6, 0, Math.PI * 2);
@@ -365,14 +365,14 @@ function drawSpecCard(ctx, card, inv, s, wall) {
         ctx.fillText(`${name} ${hex.toUpperCase()}`, left + 18, rowY);
         ctx.fillStyle = '#cbd5e1';
         ctx.font = '10px JetBrains Mono, monospace';
-        ctx.fillText(`${sheets} sheets + ${extra} extra → ${boxes} ${boxes === 1 ? 'box' : 'boxes'}`, left + 140, rowY);
+        ctx.fillText(`${buy} sheets, ${leftover} tiles left`, left + 140, rowY);
     };
-    colorRow(y + 94, s.colorTile1, 'Color 1', '#f59e0b', inv.c1Sheets, inv.extraC1, inv.boxesC1);
-    colorRow(y + 110, s.colorTile2, 'Color 2', '#38bdf8', inv.c2Sheets, inv.extraC2, inv.boxesC2);
+    colorRow(y + 94, s.colorTile1, 'Color 1', '#f59e0b', inv.buyC1, inv.leftoverC1);
+    colorRow(y + 110, s.colorTile2, 'Color 2', '#38bdf8', inv.buyC2, inv.leftoverC2);
 
     ctx.fillStyle = '#cbd5e1';
     ctx.fillText(`Hand-swaps: ${inv.handSwaps} tiles (${inv.swappedC1} C1 into C2 sheets, ${inv.swappedC2} C2 into C1 sheets)`, left, y + 128);
-    ctx.fillText(`Spares from cuts: ${inv.spareC1} C1, ${inv.spareC2} C2  |  Order: ${inv.boxes} boxes (incl. 10% waste)`, left, y + 144);
+    ctx.fillText(`Spares from cuts: ${inv.spareC1} C1, ${inv.spareC2} C2  |  Order: ${inv.buy} sheets`, left, y + 144);
 
     ctx.restore();
 }

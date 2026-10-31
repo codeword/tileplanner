@@ -30,13 +30,13 @@ Web app for planning a tile wall built from Merola Tile "Metro Rhombus" mosaic s
 The pipeline modules (`noise`, `fades`, `geometry`, `inventory`, `view`, `config`, `renderer`) don't touch the DOM or app state; `state.js` only depends on `fades` (for the algorithm list) and `geometry`. `app.js` ↔ `ui/pointer.js` and `app.js` ↔ `ui/takeoff.js` import each other, which is fine because neither uses the other at load time.
 
 ## What it does
-- Sheet model: 10.5″ W × 12.13″ H, 3 cubes × 4 rows = 36 rhombus tiles per sheet, 10 sheets per box.
+- Sheet model: 10.5″ W × 12.13″ H, 3 cubes × 4 rows = 36 rhombus tiles per sheet. The order is in sheets (no boxes or waste factor).
 - Inputs: wall width, total height, tiled height (paint above), two tile colors, paint color, grout color.
 - Sidebar order: Wall Dimensions (width, total height and tiled height as three number fields; Enter/blur re-shows the clamped value), Voids (fixed at two rows, 166px, always-visible scrollbar via `.void-list`), Color Specifications, Tiled Sub-Zones, Corruption Aesthetics, Saved Walls (grows with its list; the sidebar scrolls).
 - Tiled area split into Color 1 (top) / transition / Color 2 (bottom) bands. Sidebar order: Color 1 % (derived), Color 2 % slider (`floorPercent`, the bottom band), transition slider, rogue noise slider. The boundary wanders horizontally via 4-octave seeded noise.
 - Five fade styles: lightning (jagged teeth), Bayer 4×4 dither, cellular clusters, glitch scanlines, blue-noise dissolve. Plus "rogue noise" that scatters opposite-color tiles outside the transition band.
 - Deterministic: all randomness from seeded hashes (`currentSeed`).
-- Takeoff: each sheet labeled by majority color (tie → C2, the bottom color). Minority tiles = hand-swaps. Box order = ceil(sheets × 1.10 / 10).
+- Takeoff: each sheet labeled by majority color (tie → C2, the bottom color). Minority tiles = hand-swaps. Spares and swap leftovers are settled into sheets to order (see Takeoff).
 - Extras: click a tile to flip it (manualOverrides), invert colors per wall, save multiple named walls for a combined order, JSON config export/import, PNG download.
 
 ## State model (done: refactor step 1)
@@ -98,11 +98,11 @@ From a feature audit written with Gemini, rebuilt on the state model. All coordi
 
 **Takeoff** (`computeInventory`).
 - Majority color and hand-swaps count usable tiles only (tie → C2). Cut tiles on a kept sheet are spares of its majority color (`sheet.cutCount`).
-- Extra C1 sheets = ceil(max(0, swappedC1 − swappedC2 − spareC1) / 36), mirrored for C2. (C1 tiles pulled out of C1 sheets for C2 swaps are C1 supply.)
-- Boxes per color: ceil((sheets + extra) × 1.10 / 10). Total = sum.
-- The dashboard shows sheets, extra and boxes per color, swaps, spares and the order. Saved walls store extras and total boxes per color.
+- Per color, `settleColor(sheets, balance)` in `inventory.js`: balance = spares + tiles pulled out of that color's sheets for the other color's swaps − swaps needing that color (balanceC1 = spareC1 + swappedC2 − swappedC1). A shortfall buys ceil(−balance / 36) extra sheets; a surplus takes floor(balance / 36) sheets off the order. Sheets to order (`buyC1` / `buyC2`, total `buy`) = majority sheets + extra − sheets from spares, and the leftover is always 0–35 tiles. Boxes and the 10% waste factor were removed.
+- The dashboard bar, spec card and saved-wall rows show sheets to order and tiles left per color (net only), plus the sheets on the wall. Spares from cuts are still listed.
+- The saved-walls Total Takeoff is pooled: sheets and balances are summed over the saved walls (not the unsaved current wall) and settled once, so one wall's spares and pulled-out tiles cover another's swaps. It shows sheets to order per color, the pooled leftover tiles and the sheets on the walls. Per-wall rows still show each wall settled on its own.
 
-**Spec card** (`drawSpecCard`): wall name, wall/grid line, fade label and seed, sub-zones (top/transition/bottom % as used by `getNormalizedZones`, with the color in each band, rogue % and invert on/off), one row per color (swatch, hex, sheets + extra → boxes), swaps, spares and the order. The fade and zones lines pass `maxWidth` to `fillText` so rare long values squeeze instead of overflowing. It is laid out at 480×166 and scaled down uniformly to fit. The name is that of the linked saved wall, the one last saved, loaded or updated (`currentWall` in `ui/takeoff.js` returns `{ name, unsaved }` or null). Once the wall being edited differs from it in any `WALL_KEYS` value, an amber " (unsaved)" follows the name; with no linked wall the card shows a grey "Unsaved wall". Renaming updates the card. `renderCanvas` takes it as its last argument, so the PNG export includes it. `computeView` always places it in a strip added below the bottom margin, left-aligned with the content (`view.card`), never on the wall; its size is in CSS px, so zoom doesn't scale it.
+**Spec card** (`drawSpecCard`): wall name, wall/grid line, fade label and seed, sub-zones (top/transition/bottom % as used by `getNormalizedZones`, with the color in each band, rogue % and invert on/off), one row per color (swatch, hex, sheets to order, tiles left), swaps, spares and the order in sheets. The fade and zones lines pass `maxWidth` to `fillText` so rare long values squeeze instead of overflowing. It is laid out at 480×166 and scaled down uniformly to fit. The name is that of the linked saved wall, the one last saved, loaded or updated (`currentWall` in `ui/takeoff.js` returns `{ name, unsaved }` or null). Once the wall being edited differs from it in any `WALL_KEYS` value, an amber " (unsaved)" follows the name; with no linked wall the card shows a grey "Unsaved wall". Renaming updates the card. `renderCanvas` takes it as its last argument, so the PNG export includes it. `computeView` always places it in a strip added below the bottom margin, left-aligned with the content (`view.card`), never on the wall; its size is in CSS px, so zoom doesn't scale it.
 
 **PNG export**: the fitted plan at 4×. No × badges, HUD or drag preview. Sheet outlines/badges only if the overlay is on. Everything off the wall is transparent (`transparent = !view.onScreen` in `renderCanvas`: no canvas background, margin paint or wash), and in the clean mockup voids are cleared with `destination-out`. The card's own fill is 92% opaque. The file is named `<wall name>_<W>x<H>_<overlay|mockup>.png` (`exportFileName` in `app.js`): the linked saved wall's name (kept with unsaved changes) or `unsaved-wall`, made file-safe (runs of other characters → `-`).
 
@@ -118,7 +118,7 @@ From a feature audit written with Gemini, rebuilt on the state model. All coordi
 - **Config v6/v7:** `{ version, colors: { color1, color2, paintedWall, grout }, walls: [{ name, invertColors, physicalWallInches, tiledSubZones: { bottomPercent, transitionPercent }, algorithm, manualOverrides: { "1": { "35": 0, "13": 1 } }, voids }] }` (v7: sheet badge (from 0) → tile number (0–35) → color index shown, 0 = Color 1; Invert swaps the values). Only saved walls are in it, not the wall being edited. Applying a config replaces the saved list and the colors and resets the wall being edited to `DEFAULTS`. A v1–v5 config becomes one saved wall named "Imported wall". Warnings are prefixed with the wall name.
 
 ## Takeoff accuracy improvements
-- Done in step 4: per-color boxes, swap supply with spares, and the cut-tile rule.
+- Done: swap supply with spares, the cut-tile rule, spares settled into whole sheets per wall, and pooling across saved walls. Tiles that cross a void or wall edge count as installed (one full tile each); their offcuts aren't credited, and they aren't counted anywhere yet.
 - Make sheet alignment/left offset adjustable (currently hard-coded at 1.875″).
 - Grout joint isn't modeled. Verify Merola's published sheet dimensions.
 

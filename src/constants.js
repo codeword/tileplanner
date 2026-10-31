@@ -54,9 +54,6 @@ export const DRAG_THRESHOLD_PX = 3;      // pointer movement below this is a cli
 export const EXPORT_PIXEL_DENSITY = 4;   // PNG export renders at 4× CSS pixels...
 export const EXPORT_MAX_PIXELS = 8192;   // ...capped so the longest side stays within this
 
-// Takeoff
-export const SHEETS_PER_BOX = 10;
-export const WASTE_FACTOR = 1.10;
 
 // v3: color1/C1 is the top color (v1/v2 had color1 at the bottom). v4: adds voids.
 // v5: same fields; the pattern math changed (integer hash, floor-based rows), so older

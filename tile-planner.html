@@ -466,9 +466,6 @@
         const EXPORT_PIXEL_DENSITY = 4;   // PNG export renders at 4× CSS pixels...
         const EXPORT_MAX_PIXELS = 8192;   // ...capped so the longest side stays within this
 
-        // Takeoff
-        const SHEETS_PER_BOX = 10;
-        const WASTE_FACTOR = 1.10;
 
         // v3: color1/C1 is the top color (v1/v2 had color1 at the bottom). v4: adds voids.
         // v5: same fields; the pattern math changed (integer hash, floor-based rows), so older
@@ -902,13 +899,27 @@
         }
 
         // ---- src/inventory.js ----
-        // Takeoff stage: majority colors, hand-swaps, spares, extra sheets and boxes.
+        // Takeoff stage: majority colors, hand-swaps, spares and sheets to order.
+
+        // Settles one color: its tile balance (spares + tiles pulled out of its sheets for the
+        // other color's swaps − swaps needing this color) against its majority sheets. A shortfall
+        // buys extra sheets; whole sheets' worth of surplus come off the order. Leftover is
+        // always 0–35 tiles. Used per wall and, with summed sheets and balances, for the
+        // pooled saved-walls total.
+        function settleColor(sheets, balance) {
+            const extra = balance < 0 ? Math.ceil(-balance / TILES_PER_SHEET) : 0;
+            const fromSpares = balance > 0 ? Math.floor(balance / TILES_PER_SHEET) : 0;
+            return {
+                extra,
+                fromSpares,
+                buy: sheets + extra - fromSpares,
+                leftover: balance + (extra - fromSpares) * TILES_PER_SHEET
+            };
+        }
 
         // --- Pipeline stage 3: inventory (majority rule, hand-swaps, spares, order) ---
         // Majority color and hand-swaps count usable tiles only. Cut tiles on a kept sheet are
-        // spares of that sheet's majority color. Hand-swaps are supplied first by the tiles pulled
-        // out of the other color's sheets, then by spares; any shortfall is bought as extra
-        // sheets. Boxes are counted per color with standard waste.
+        // spares of that sheet's majority color. Each color is then settled (settleColor).
         // Also labels each sheet with majorityIdx / minorityIdx / minorityCount / cutCount / isMixed.
         function computeInventory(grid) {
             let c1Sheets = 0;
@@ -948,11 +959,11 @@
                 sheet.isMixed = (c1Count > 0 && c2Count > 0);
             }
 
-            const extraC1 = Math.ceil(Math.max(0, swappedC1 - swappedC2 - spareC1) / TILES_PER_SHEET);
-            const extraC2 = Math.ceil(Math.max(0, swappedC2 - swappedC1 - spareC2) / TILES_PER_SHEET);
-            const boxesFor = (sheets) => Math.ceil((sheets * WASTE_FACTOR) / SHEETS_PER_BOX);
-            const boxesC1 = boxesFor(c1Sheets + extraC1);
-            const boxesC2 = boxesFor(c2Sheets + extraC2);
+            // C2 tiles placed on C1 sheets free the C1 tiles they replace, and vice versa
+            const balanceC1 = spareC1 + swappedC2 - swappedC1;
+            const balanceC2 = spareC2 + swappedC1 - swappedC2;
+            const c1 = settleColor(c1Sheets, balanceC1);
+            const c2 = settleColor(c2Sheets, balanceC2);
 
             return {
                 totalSheets: grid.sheets.length,
@@ -965,11 +976,17 @@
                 swappedC2,
                 spareC1,
                 spareC2,
-                extraC1,
-                extraC2,
-                boxesC1,
-                boxesC2,
-                boxes: boxesC1 + boxesC2
+                balanceC1,
+                balanceC2,
+                extraC1: c1.extra,
+                extraC2: c2.extra,
+                fromSparesC1: c1.fromSpares,
+                fromSparesC2: c2.fromSpares,
+                buyC1: c1.buy,
+                buyC2: c2.buy,
+                buy: c1.buy + c2.buy,
+                leftoverC1: c1.leftover,
+                leftoverC2: c2.leftover
             };
         }
 
@@ -1395,8 +1412,8 @@
             ctx.fillText(`FADE: ${FADES[s.algorithm].label}  |  SEED: ${s.seed}`, left, y + 60, width - 24);
             ctx.fillText(`ZONES: Top ${topC} ${pct(zones.wallPct)} · Trans ${pct(zones.transPct)} · Bottom ${bottomC} ${pct(zones.floorPct)}  |  Rogue ${pct(s.outlierPct)}  |  Invert ${s.invertColors ? 'on' : 'off'}`, left, y + 76, width - 24);
 
-            // One row per color: swatch, hex, sheets, extra sheets, boxes
-            const colorRow = (rowY, hex, name, accent, sheets, extra, boxes) => {
+            // One row per color: swatch, hex, sheets to order (after extras and spares), leftover
+            const colorRow = (rowY, hex, name, accent, buy, leftover) => {
                 ctx.fillStyle = hex;
                 ctx.beginPath();
                 ctx.arc(left + 6, rowY + 5, 6, 0, Math.PI * 2);
@@ -1409,14 +1426,14 @@
                 ctx.fillText(`${name} ${hex.toUpperCase()}`, left + 18, rowY);
                 ctx.fillStyle = '#cbd5e1';
                 ctx.font = '10px JetBrains Mono, monospace';
-                ctx.fillText(`${sheets} sheets + ${extra} extra → ${boxes} ${boxes === 1 ? 'box' : 'boxes'}`, left + 140, rowY);
+                ctx.fillText(`${buy} sheets, ${leftover} tiles left`, left + 140, rowY);
             };
-            colorRow(y + 94, s.colorTile1, 'Color 1', '#f59e0b', inv.c1Sheets, inv.extraC1, inv.boxesC1);
-            colorRow(y + 110, s.colorTile2, 'Color 2', '#38bdf8', inv.c2Sheets, inv.extraC2, inv.boxesC2);
+            colorRow(y + 94, s.colorTile1, 'Color 1', '#f59e0b', inv.buyC1, inv.leftoverC1);
+            colorRow(y + 110, s.colorTile2, 'Color 2', '#38bdf8', inv.buyC2, inv.leftoverC2);
 
             ctx.fillStyle = '#cbd5e1';
             ctx.fillText(`Hand-swaps: ${inv.handSwaps} tiles (${inv.swappedC1} C1 into C2 sheets, ${inv.swappedC2} C2 into C1 sheets)`, left, y + 128);
-            ctx.fillText(`Spares from cuts: ${inv.spareC1} C1, ${inv.spareC2} C2  |  Order: ${inv.boxes} boxes (incl. 10% waste)`, left, y + 144);
+            ctx.fillText(`Spares from cuts: ${inv.spareC1} C1, ${inv.spareC2} C2  |  Order: ${inv.buy} sheets`, left, y + 144);
 
             ctx.restore();
         }
@@ -2072,18 +2089,17 @@
 
         // --- Pipeline stage 6: takeoff dashboard bar ---
         function renderDashboard(inv) {
-            const boxes = (n) => `${n} ${n === 1 ? 'box' : 'boxes'}`;
             statTotalSheets.textContent = inv.totalSheets;
             statGridDims.textContent = `(${inv.gridCols} cols × ${inv.gridRows} rows)`;
-            statC1Sheets.textContent = `${inv.c1Sheets} sheets`;
-            statC1Detail.textContent = `+${inv.extraC1} extra · ${boxes(inv.boxesC1)}`;
-            statC2Sheets.textContent = `${inv.c2Sheets} sheets`;
-            statC2Detail.textContent = `+${inv.extraC2} extra · ${boxes(inv.boxesC2)}`;
+            statC1Sheets.textContent = `${inv.buyC1} sheets`;
+            statC1Detail.textContent = `${inv.leftoverC1} tiles left`;
+            statC2Sheets.textContent = `${inv.buyC2} sheets`;
+            statC2Detail.textContent = `${inv.leftoverC2} tiles left`;
             statHandSwaps.textContent = `${inv.handSwaps} tiles`;
             statSwappedC1.textContent = inv.swappedC1;
             statSwappedC2.textContent = inv.swappedC2;
             statSpares.textContent = `${inv.spareC1} C1, ${inv.spareC2} C2`;
-            statCartons.textContent = `${boxes(inv.boxes)} (${inv.boxesC1} C1 + ${inv.boxesC2} C2)`;
+            statCartons.textContent = `${inv.buy} sheets (${inv.buyC1} C1 + ${inv.buyC2} C2)`;
         }
 
         // --- Multi-wall takeoff ---
@@ -2172,14 +2188,14 @@
             let aggSwaps = 0;
             let aggSwapsC1 = 0;
             let aggSwapsC2 = 0;
-            let aggExtraC1 = 0;
-            let aggExtraC2 = 0;
+            let aggBalanceC1 = 0;
+            let aggBalanceC2 = 0;
 
             savedWalls.forEach((w, idx) => {
                 const inv = countsFor(w.settings);
                 const voidCount = w.settings.voids.filter(v => !v.measureOnly).length;
-                aggExtraC1 += inv.extraC1;
-                aggExtraC2 += inv.extraC2;
+                aggBalanceC1 += inv.balanceC1;
+                aggBalanceC2 += inv.balanceC2;
                 aggSheets += inv.totalSheets;
                 aggC1 += inv.c1Sheets;
                 aggC2 += inv.c2Sheets;
@@ -2195,7 +2211,8 @@
                             <span data-drag-handle class="text-slate-600 hover:text-slate-400 cursor-grab select-none leading-4 touch-none" title="Drag to reorder">⋮⋮</span>
                             <div class="min-w-0">
                                 <button type="button" data-action="rename" class="font-medium text-slate-200 hover:text-cyan-300 text-left truncate max-w-full" title="Click to rename">${escapeHtml(w.name)}</button>${unsaved ? '<span class="text-amber-400 text-[10px] font-mono ml-1">(unsaved)</span>' : ''}
-                                <span class="text-slate-500 block font-mono">C1: ${inv.c1Sheets}+${inv.extraC1} | C2: ${inv.c2Sheets}+${inv.extraC2} (${inv.totalSheets} sheets${voidCount ? `, ${voidCount} voids` : ''}${w.settings.invertColors ? ', inverted' : ''})</span>
+                                <span class="text-slate-300 block font-mono">C1: ${inv.buyC1} sheets, ${inv.leftoverC1} left | C2: ${inv.buyC2} sheets, ${inv.leftoverC2} left</span>
+                                <span class="text-slate-500 block font-mono">${inv.totalSheets} sheets on wall${voidCount ? `, ${voidCount} voids` : ''}${w.settings.invertColors ? ', inverted' : ''}</span>
                                 <span class="text-amber-400 text-[10px] block font-mono">Swaps: ${inv.handSwaps} (${inv.swappedC1} C1, ${inv.swappedC2} C2)</span>
                             </div>
                         </div>
@@ -2208,13 +2225,13 @@
                 `;
             });
 
-            // Boxes per color across all walls, with standard waste
-            const boxesC1 = Math.ceil(((aggC1 + aggExtraC1) * WASTE_FACTOR) / SHEETS_PER_BOX);
-            const boxesC2 = Math.ceil(((aggC2 + aggExtraC2) * WASTE_FACTOR) / SHEETS_PER_BOX);
+            // Pooled across walls: one wall's spares and pulled-out tiles cover another's swaps
+            const c1 = settleColor(aggC1, aggBalanceC1);
+            const c2 = settleColor(aggC2, aggBalanceC2);
             html += `
                 <div class="pt-2 border-t border-slate-800 font-mono text-[11px] text-cyan-300">
-                    <div>Total Takeoff: ${aggSheets} sheets (${boxesC1 + boxesC2} boxes: ${boxesC1} C1 + ${boxesC2} C2)</div>
-                    <div class="text-slate-400">Total C1: ${aggC1}+${aggExtraC1} extra | Total C2: ${aggC2}+${aggExtraC2} extra</div>
+                    <div>Total Takeoff: ${c1.buy + c2.buy} sheets (${c1.buy} C1 + ${c2.buy} C2)</div>
+                    <div class="text-slate-400">Leftover: ${c1.leftover} C1, ${c2.leftover} C2 tiles | ${aggSheets} sheets on walls</div>
                     <div class="text-amber-400 text-[10px]">Total Swaps: ${aggSwaps} (${aggSwapsC1} C1, ${aggSwapsC2} C2)</div>
                 </div>
             `;
