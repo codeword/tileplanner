@@ -5,6 +5,7 @@ import { FADES, getNormalizedZones } from '../fades.js';
 import { DEFAULTS, VOID_SNAP_INCHES, commitVoidClip, setState, snapInches, state } from '../state.js';
 import { applyConfigJson, closeConfigModal, copyConfigJson, openConfigModal } from './config-modal.js';
 import { bindCanvasPointer, canvasCenter, deleteVoid, zoomAt } from './pointer.js';
+import { downloadInventoryImage, exportSavedWallsZip } from './export.js';
 import { bindSavedWallsList, saveCurrentWallToTakeoff, unlinkWall } from './takeoff.js';
 
 const inputWidth = document.getElementById('wallWidthInches');
@@ -169,6 +170,10 @@ export function bindInputs() {
     // Multi-Wall Takeoff
     document.getElementById('addWallToTakeoffBtn').addEventListener('click', saveCurrentWallToTakeoff);
     bindSavedWallsList();
+    const zipBtn = document.getElementById('exportWallsZipBtn');
+    const inventoryBtn = document.getElementById('exportInventoryBtn');
+    zipBtn.addEventListener('click', () => exportSavedWallsZip(zipBtn));
+    inventoryBtn.addEventListener('click', () => downloadInventoryImage(inventoryBtn));
 
     // Config Modal
     document.getElementById('openConfigModalBtn').addEventListener('click', openConfigModal);

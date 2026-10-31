@@ -291,6 +291,14 @@
                         + Save Wall
                     </button>
                 </div>
+                <div class="flex items-center gap-2">
+                    <button id="exportWallsZipBtn" disabled class="text-[11px] bg-slate-800 hover:bg-slate-700 text-cyan-400 px-2 py-1 rounded border border-slate-700 transition disabled:opacity-40 disabled:cursor-default" title="Every saved wall as overlay and mockup PNGs, plus the inventory image">
+                        Export ZIP
+                    </button>
+                    <button id="exportInventoryBtn" disabled class="text-[11px] bg-slate-800 hover:bg-slate-700 text-cyan-400 px-2 py-1 rounded border border-slate-700 transition disabled:opacity-40 disabled:cursor-default" title="Per-wall sheets, pooled total and 5% / 10% reserves">
+                        Inventory PNG
+                    </button>
+                </div>
                 <div id="savedWallsList" class="space-y-1.5 text-xs">
                     <div class="text-[11px] text-slate-500 italic p-1">No additional walls saved. Click "+ Save Wall" to aggregate multiple bathroom walls into a single carton order.</div>
                 </div>
@@ -2145,6 +2153,21 @@
             scheduleRender();
         }
 
+        // Every saved wall's counts, and the total pooled across them: sheets and tile balances are
+        // summed and settled once, so one wall's spares and pulled-out tiles cover another's swaps.
+        function pooledTakeoff() {
+            const walls = savedWalls.map(w => ({ name: w.name, settings: w.settings, inv: countsFor(w.settings) }));
+            const sum = (key) => walls.reduce((n, w) => n + w.inv[key], 0);
+            return {
+                walls,
+                sheetsOnWalls: sum('totalSheets'),
+                swappedC1: sum('swappedC1'),
+                swappedC2: sum('swappedC2'),
+                c1: settleColor(sum('c1Sheets'), sum('balanceC1')),
+                c2: settleColor(sum('c2Sheets'), sum('balanceC2'))
+            };
+        }
+
         function countsFor(settings) {
             if (!wallCounts.has(settings)) {
                 wallCounts.set(settings, computeWall(normalizeState({ ...state, ...settings })).inventory);
@@ -2176,32 +2199,22 @@
         function renderSavedWallsList() {
             const list = document.getElementById('savedWallsList');
             linkedShownUnsaved = Boolean(linkedWall) && isUnsaved(state);
+            for (const id of ['exportWallsZipBtn', 'exportInventoryBtn']) {
+                const btn = document.getElementById(id);
+                if (btn.textContent.trim().endsWith('…')) continue; // an export is running
+                btn.disabled = savedWalls.length === 0;
+            }
             if (savedWalls.length === 0) {
                 list.innerHTML = `<div class="text-[11px] text-slate-500 italic p-1">No additional walls saved.</div>`;
                 return;
             }
 
             let html = '';
-            let aggSheets = 0;
-            let aggC1 = 0;
-            let aggC2 = 0;
-            let aggSwaps = 0;
-            let aggSwapsC1 = 0;
-            let aggSwapsC2 = 0;
-            let aggBalanceC1 = 0;
-            let aggBalanceC2 = 0;
+            const total = pooledTakeoff();
 
             savedWalls.forEach((w, idx) => {
-                const inv = countsFor(w.settings);
+                const inv = total.walls[idx].inv;
                 const voidCount = w.settings.voids.filter(v => !v.measureOnly).length;
-                aggBalanceC1 += inv.balanceC1;
-                aggBalanceC2 += inv.balanceC2;
-                aggSheets += inv.totalSheets;
-                aggC1 += inv.c1Sheets;
-                aggC2 += inv.c2Sheets;
-                aggSwaps += inv.handSwaps;
-                aggSwapsC1 += inv.swappedC1;
-                aggSwapsC2 += inv.swappedC2;
 
                 const linked = (w === linkedWall);
                 const unsaved = linked && linkedShownUnsaved;
@@ -2225,14 +2238,12 @@
                 `;
             });
 
-            // Pooled across walls: one wall's spares and pulled-out tiles cover another's swaps
-            const c1 = settleColor(aggC1, aggBalanceC1);
-            const c2 = settleColor(aggC2, aggBalanceC2);
+            const { c1, c2 } = total;
             html += `
                 <div class="pt-2 border-t border-slate-800 font-mono text-[11px] text-cyan-300">
                     <div>Total Takeoff: ${c1.buy + c2.buy} sheets (${c1.buy} C1 + ${c2.buy} C2)</div>
-                    <div class="text-slate-400">Leftover: ${c1.leftover} C1, ${c2.leftover} C2 tiles | ${aggSheets} sheets on walls</div>
-                    <div class="text-amber-400 text-[10px]">Total Swaps: ${aggSwaps} (${aggSwapsC1} C1, ${aggSwapsC2} C2)</div>
+                    <div class="text-slate-400">Leftover: ${c1.leftover} C1, ${c2.leftover} C2 tiles | ${total.sheetsOnWalls} sheets on walls</div>
+                    <div class="text-amber-400 text-[10px]">Total Swaps: ${total.swappedC1 + total.swappedC2} (${total.swappedC1} C1, ${total.swappedC2} C2)</div>
                 </div>
             `;
 
@@ -2385,41 +2396,54 @@
         }
 
         // --- Export Canvas as High-Res PNG ---
-        // Re-renders the current view off-screen at a higher pixel density instead of copying the
-        // on-screen canvas.
-        // It always covers the whole plan at the fitted scale, whatever the current zoom and pan.
-        function downloadCanvasPNG() {
-            if (!lastGrid) return;
-            const fitted = computeView(state, lastArea, 1);
+        // Re-renders a wall off-screen at a higher pixel density instead of copying the on-screen
+        // canvas. It always covers the whole plan at the fitted scale, whatever the current zoom
+        // and pan. Also used for every saved wall in the zip export (ui/export.js).
+        function renderExportCanvas(s, grid, inventory, wall) {
+            const fitted = computeView(s, lastArea, 1);
             const longestSide = Math.max(fitted.cssWidth, fitted.cssHeight);
-            const view = computeView(state, lastArea, Math.min(EXPORT_PIXEL_DENSITY, EXPORT_MAX_PIXELS / longestSide));
+            const view = computeView(s, lastArea, Math.min(EXPORT_PIXEL_DENSITY, EXPORT_MAX_PIXELS / longestSide));
 
             const exportCanvas = document.createElement('canvas');
             exportCanvas.width = Math.round(view.cssWidth * view.dpr);
             exportCanvas.height = Math.round(view.cssHeight * view.dpr);
-            renderCanvas(exportCanvas.getContext('2d'), view, lastGrid, lastInventory, state, currentWall(state));
+            renderCanvas(exportCanvas.getContext('2d'), view, grid, inventory, s, wall);
+            return exportCanvas;
+        }
 
-            exportCanvas.toBlob((blob) => {
-                if (!blob) {
-                    console.error('Error generating PNG: canvas could not be encoded');
-                    return;
-                }
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.download = exportFileName(state, currentWall(state));
-                link.href = url;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                setTimeout(() => URL.revokeObjectURL(url), 0);
-            }, 'image/png');
+        function canvasToBlob(c) {
+            return new Promise((resolve, reject) => c.toBlob(
+                (blob) => blob ? resolve(blob) : reject(new Error('canvas could not be encoded')), 'image/png'));
+        }
+
+        function downloadBlob(blob, fileName) {
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.download = fileName;
+            link.href = url;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setTimeout(() => URL.revokeObjectURL(url), 0);
+        }
+
+        function downloadCanvasPNG() {
+            if (!lastGrid) return;
+            const wall = currentWall(state);
+            canvasToBlob(renderExportCanvas(state, lastGrid, lastInventory, wall))
+                .then(blob => downloadBlob(blob, exportFileName(state, wall)))
+                .catch(err => console.error('Error generating PNG:', err.message));
         }
 
         // <wall name>_<W>x<H>_<overlay|mockup>.png. The name is the linked saved wall's (even with
-        // unsaved changes) or "unsaved-wall", with runs of anything but letters, digits, . _ - as "-".
+        // unsaved changes) or "unsaved-wall", with runs of anything but letters, digits, . _ - as
+        // one "-" ("Bathroom - Floor" → "Bathroom-Floor").
         function exportFileName(s, wall) {
-            const name = (wall ? wall.name : 'unsaved-wall').replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'wall';
-            return `${name}_${s.wallWidthInches}x${s.wallTotalHeightInches}_${s.showSheetOverlay ? 'overlay' : 'mockup'}.png`;
+            return `${fileSafe(wall ? wall.name : 'unsaved-wall')}_${s.wallWidthInches}x${s.wallTotalHeightInches}_${s.showSheetOverlay ? 'overlay' : 'mockup'}.png`;
+        }
+
+        function fileSafe(text) {
+            return text.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/-{2,}/g, '-').replace(/^-+|-+$/g, '') || 'wall';
         }
 
         // Re-render when the window moves to a screen with a different pixel density
@@ -2482,6 +2506,329 @@
             } else {
                 closeConfigModal();
             }
+        }
+
+        // ---- src/inventory-image.js ----
+        // Inventory image for the saved walls: one row per wall, the pooled total, and the
+        // minimum / +5% / +10% sheet reserves per color. Drawn in CSS px; the caller sizes the
+        // canvas from inventoryImageSize() × dpr.
+
+        const IMG_WIDTH = 760;
+        const PAD = 24;
+        const ROW_H = 20;
+        const HEADER_H = 92;      // title, date, color legend
+        const TABLE_HEAD_H = 26;
+        const RESERVE_TOP_GAP = 34;
+        const RESERVE_ROWS = 3;
+        const FOOTER_H = 56;
+
+        const RESERVE_LEVELS = [0, 0.05, 0.10];
+
+        // Sheets with a reserve, rounded up to whole sheets
+        function withReserve(sheets, level) {
+            return Math.ceil(sheets * (1 + level) - 1e-9);
+        }
+
+        function inventoryImageSize(total) {
+            const rows = total.walls.length + 1; // + pooled total
+            const height = PAD + HEADER_H + TABLE_HEAD_H + rows * ROW_H + RESERVE_TOP_GAP + TABLE_HEAD_H + RESERVE_ROWS * ROW_H + FOOTER_H + PAD;
+            return { width: IMG_WIDTH, height };
+        }
+
+        // total: pooledTakeoff() from ui/takeoff.js; colors: { c1, c2 } hex; date: Date
+        function drawInventoryImage(ctx, total, colors, date, dpr) {
+            const { width, height } = inventoryImageSize(total);
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(0, 0, width, height);
+            ctx.textBaseline = 'middle';
+
+            const text = (str, x, y, { font = '11px JetBrains Mono, monospace', color = '#cbd5e1', align = 'left', maxWidth } = {}) => {
+                ctx.font = font;
+                ctx.fillStyle = color;
+                ctx.textAlign = align;
+                if (maxWidth) {
+                    let s = str;
+                    while (s.length > 1 && ctx.measureText(s).width > maxWidth) s = s.slice(0, -2) + '…';
+                    ctx.fillText(s, x, y);
+                }
+                else ctx.fillText(str, x, y);
+            };
+            const swatch = (x, y, hex) => {
+                ctx.fillStyle = hex;
+                ctx.beginPath();
+                ctx.arc(x, y, 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            };
+
+            // Header
+            let y = PAD + 10;
+            text('TILE INVENTORY · SAVED WALLS', PAD, y, { font: 'bold 16px Inter, sans-serif', color: '#ffffff' });
+            y += 22;
+            text(`${date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}  ·  Merola Metro Rhombus, 36 tiles per sheet  ·  ${total.walls.length} walls`, PAD, y, { color: '#94a3b8' });
+            y += 26;
+            swatch(PAD + 6, y, colors.c1);
+            text(`Color 1 ${colors.c1.toUpperCase()}`, PAD + 18, y, { font: 'bold 11px JetBrains Mono, monospace', color: '#f59e0b' });
+            swatch(PAD + 186, y, colors.c2);
+            text(`Color 2 ${colors.c2.toUpperCase()}`, PAD + 198, y, { font: 'bold 11px JetBrains Mono, monospace', color: '#38bdf8' });
+
+            // Per-wall table. Columns: name, size, sheets on wall, then sheets/left per color.
+            const right = width - PAD;
+            const cols = [
+                { label: 'Wall', x: PAD, align: 'left' },
+                { label: 'Size (tiled)', x: PAD + 220, align: 'left' },
+                { label: 'On wall', x: PAD + 428, align: 'right' },
+                { label: 'C1 sheets', x: PAD + 508, align: 'right' },
+                { label: 'C1 left', x: PAD + 568, align: 'right' },
+                { label: 'C2 sheets', x: PAD + 648, align: 'right' },
+                { label: 'C2 left', x: right, align: 'right' }
+            ];
+            const headerRow = (yy, labels) => {
+                ctx.fillStyle = '#1e293b';
+                ctx.fillRect(PAD - 8, yy - TABLE_HEAD_H / 2, width - 2 * PAD + 16, TABLE_HEAD_H);
+                labels.forEach(([label, x, align]) => text(label, x, yy, { font: 'bold 10px Inter, sans-serif', color: '#94a3b8', align }));
+            };
+            const rowBand = (yy, i) => {
+                if (i % 2 === 1) {
+                    ctx.fillStyle = 'rgba(30, 41, 59, 0.45)';
+                    ctx.fillRect(PAD - 8, yy - ROW_H / 2, width - 2 * PAD + 16, ROW_H);
+                }
+            };
+
+            y = PAD + HEADER_H + TABLE_HEAD_H / 2;
+            headerRow(y, cols.map(c => [c.label, c.x, c.align]));
+            y += TABLE_HEAD_H / 2 + ROW_H / 2;
+
+            total.walls.forEach((w, i) => {
+                const s = w.settings;
+                rowBand(y, i);
+                const cells = [
+                    w.name,
+                    `${s.wallWidthInches}″ × ${s.wallTotalHeightInches}″ (${s.tiledHeightInches}″)`,
+                    String(w.inv.totalSheets),
+                    String(w.inv.buyC1),
+                    String(w.inv.leftoverC1),
+                    String(w.inv.buyC2),
+                    String(w.inv.leftoverC2)
+                ];
+                cells.forEach((c, j) => text(c, cols[j].x, y, {
+                    align: cols[j].align,
+                    color: j === 3 ? '#fbbf24' : j === 5 ? '#7dd3fc' : '#cbd5e1',
+                    maxWidth: j === 0 ? 210 : undefined
+                }));
+                y += ROW_H;
+            });
+
+            // Pooled total
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(PAD - 8, y - ROW_H / 2 + 0.5);
+            ctx.lineTo(width - PAD + 8, y - ROW_H / 2 + 0.5);
+            ctx.stroke();
+            const bold = 'bold 11px JetBrains Mono, monospace';
+            text('Total (pooled)', cols[0].x, y, { font: bold, color: '#ffffff' });
+            text(String(total.sheetsOnWalls), cols[2].x, y, { font: bold, color: '#ffffff', align: 'right' });
+            text(String(total.c1.buy), cols[3].x, y, { font: bold, color: '#fbbf24', align: 'right' });
+            text(String(total.c1.leftover), cols[4].x, y, { font: bold, color: '#ffffff', align: 'right' });
+            text(String(total.c2.buy), cols[5].x, y, { font: bold, color: '#7dd3fc', align: 'right' });
+            text(String(total.c2.leftover), cols[6].x, y, { font: bold, color: '#ffffff', align: 'right' });
+            y += ROW_H / 2;
+
+            // Reserves on the pooled minimum, rounded up per color
+            y += RESERVE_TOP_GAP - 8;
+            text('SHEETS TO HAVE ON HAND', PAD, y - 12, { font: 'bold 11px Inter, sans-serif', color: '#ffffff' });
+            y += TABLE_HEAD_H / 2;
+            const rcols = [
+                ['', PAD, 'left'],
+                ['Color 1', PAD + 300, 'right'],
+                ['Color 2', PAD + 440, 'right'],
+                ['Total', PAD + 580, 'right']
+            ];
+            headerRow(y, rcols);
+            y += TABLE_HEAD_H / 2 + ROW_H / 2;
+            RESERVE_LEVELS.forEach((level, i) => {
+                rowBand(y, i);
+                const c1 = withReserve(total.c1.buy, level);
+                const c2 = withReserve(total.c2.buy, level);
+                const extra = (n, base) => level ? `${n} (+${n - base})` : String(n);
+                text(level ? `+${Math.round(level * 100)}% reserve` : 'Minimum', rcols[0][1], y, { font: level ? undefined : bold, color: '#ffffff' });
+                text(extra(c1, total.c1.buy), rcols[1][1], y, { color: '#fbbf24', align: 'right' });
+                text(extra(c2, total.c2.buy), rcols[2][1], y, { color: '#7dd3fc', align: 'right' });
+                text(extra(c1 + c2, total.c1.buy + total.c2.buy), rcols[3][1], y, { color: '#ffffff', align: 'right' });
+                y += ROW_H;
+            });
+
+            // Footer: how the numbers are made
+            y += 12;
+            const note = { font: '10px Inter, sans-serif', color: '#64748b' };
+            text('Sheets per color = majority sheets + extra sheets for hand-swaps − whole sheets\' worth of spare tiles (0–35 tiles left).', PAD, y, note);
+            text('The total is pooled: one wall\'s spares cover another\'s swaps, so it can be less than the sum of the walls.', PAD, y + 15, note);
+            text('Reserves are added to the pooled minimum and rounded up to whole sheets per color.', PAD, y + 30, note);
+        }
+
+        // ---- src/zip.js ----
+        // Minimal zip writer: stored entries (no compression; PNGs are already compressed), so the
+        // single-file build needs no library and works offline.
+
+        const CRC_TABLE = (() => {
+            const table = new Uint32Array(256);
+            for (let n = 0; n < 256; n++) {
+                let c = n;
+                for (let k = 0; k < 8; k++) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+                table[n] = c >>> 0;
+            }
+            return table;
+        })();
+
+        function crc32(bytes) {
+            let c = 0xffffffff;
+            for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
+            return (c ^ 0xffffffff) >>> 0;
+        }
+
+        // MS-DOS date/time fields used by zip headers
+        function dosDateTime(d) {
+            const time = (d.getHours() << 11) | (d.getMinutes() << 5) | Math.floor(d.getSeconds() / 2);
+            const date = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+            return { time, date };
+        }
+
+        // files: [{ name, data: Uint8Array }] → Blob (application/zip). Names are stored as UTF-8.
+        function makeZip(files, when = new Date()) {
+            const encoder = new TextEncoder();
+            const { time, date } = dosDateTime(when);
+            const parts = [];
+            const central = [];
+            let offset = 0;
+
+            for (const file of files) {
+                const name = encoder.encode(file.name);
+                const crc = crc32(file.data);
+                const size = file.data.length;
+
+                const local = new DataView(new ArrayBuffer(30));
+                local.setUint32(0, 0x04034b50, true); // local file header
+                local.setUint16(4, 20, true);         // version needed
+                local.setUint16(6, 0x0800, true);     // flags: UTF-8 names
+                local.setUint16(8, 0, true);          // method: stored
+                local.setUint16(10, time, true);
+                local.setUint16(12, date, true);
+                local.setUint32(14, crc, true);
+                local.setUint32(18, size, true);
+                local.setUint32(22, size, true);
+                local.setUint16(26, name.length, true);
+                local.setUint16(28, 0, true);
+                parts.push(local, name, file.data);
+
+                const entry = new DataView(new ArrayBuffer(46));
+                entry.setUint32(0, 0x02014b50, true); // central directory header
+                entry.setUint16(4, 20, true);         // version made by
+                entry.setUint16(6, 20, true);         // version needed
+                entry.setUint16(8, 0x0800, true);
+                entry.setUint16(10, 0, true);
+                entry.setUint16(12, time, true);
+                entry.setUint16(14, date, true);
+                entry.setUint32(16, crc, true);
+                entry.setUint32(20, size, true);
+                entry.setUint32(24, size, true);
+                entry.setUint16(28, name.length, true);
+                entry.setUint32(42, offset, true);    // local header offset (other fields 0)
+                central.push(entry, name);
+
+                offset += 30 + name.length + size;
+            }
+
+            const centralSize = central.reduce((n, p) => n + p.byteLength, 0);
+            const end = new DataView(new ArrayBuffer(22));
+            end.setUint32(0, 0x06054b50, true);       // end of central directory
+            end.setUint16(8, files.length, true);
+            end.setUint16(10, files.length, true);
+            end.setUint32(12, centralSize, true);
+            end.setUint32(16, offset, true);
+
+            return new Blob([...parts, ...central, end], { type: 'application/zip' });
+        }
+
+        // ---- src/ui/export.js ----
+        // Saved-walls export: a zip of every wall's overlay and mockup PNGs plus the inventory
+        // image, and the inventory image on its own.
+
+        const INVENTORY_DPR = 2;
+
+        function localDate(d) {
+            const pad = (n) => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        }
+
+        async function blobBytes(blob) {
+            return new Uint8Array(await blob.arrayBuffer());
+        }
+
+        function inventoryCanvas(total, date) {
+            const { width, height } = inventoryImageSize(total);
+            const c = document.createElement('canvas');
+            c.width = width * INVENTORY_DPR;
+            c.height = height * INVENTORY_DPR;
+            drawInventoryImage(c.getContext('2d'), total, { c1: state.colorTile1, c2: state.colorTile2 }, date, INVENTORY_DPR);
+            return c;
+        }
+
+        // Runs an export with the button disabled and relabelled, restoring it afterwards
+        async function withBusyButton(button, label, work) {
+            const original = button.textContent;
+            button.disabled = true;
+            button.textContent = label;
+            try {
+                await work();
+            } catch (err) {
+                console.error('Export failed:', err);
+                alert(`Export failed: ${err.message}`);
+            } finally {
+                button.disabled = false;
+                button.textContent = original;
+            }
+        }
+
+        // Each saved wall is rendered in the current shared colors, once with the sheet overlay and
+        // once as the clean mockup. Names that collide (same wall name and size) get -2, -3, ….
+        function exportSavedWallsZip(button) {
+            const total = pooledTakeoff();
+            if (!total.walls.length) return;
+            return withBusyButton(button, 'Exporting…', async () => {
+                const date = new Date();
+                const files = [];
+                const used = new Set();
+                const unique = (name) => {
+                    let candidate = name;
+                    for (let n = 2; used.has(candidate); n++) candidate = name.replace(/\.png$/, `-${n}.png`);
+                    used.add(candidate);
+                    return candidate;
+                };
+                for (const w of total.walls) {
+                    for (const overlay of [true, false]) {
+                        const s = normalizeState({ ...state, ...w.settings, showSheetOverlay: overlay });
+                        const { grid, inventory } = computeWall(s);
+                        const wall = { name: w.name, unsaved: false };
+                        const blob = await canvasToBlob(renderExportCanvas(s, grid, inventory, wall));
+                        files.push({ name: unique(exportFileName(s, wall)), data: await blobBytes(blob) });
+                    }
+                }
+                files.push({ name: unique('inventory.png'), data: await blobBytes(await canvasToBlob(inventoryCanvas(total, date))) });
+                downloadBlob(makeZip(files, date), `saved-walls_${localDate(date)}.zip`);
+            });
+        }
+
+        function downloadInventoryImage(button) {
+            const total = pooledTakeoff();
+            if (!total.walls.length) return;
+            return withBusyButton(button, 'Rendering…', async () => {
+                const date = new Date();
+                downloadBlob(await canvasToBlob(inventoryCanvas(total, date)), `inventory_${localDate(date)}.png`);
+            });
         }
 
         // ---- src/ui/controls.js ----
@@ -2649,6 +2996,10 @@
             // Multi-Wall Takeoff
             document.getElementById('addWallToTakeoffBtn').addEventListener('click', saveCurrentWallToTakeoff);
             bindSavedWallsList();
+            const zipBtn = document.getElementById('exportWallsZipBtn');
+            const inventoryBtn = document.getElementById('exportInventoryBtn');
+            zipBtn.addEventListener('click', () => exportSavedWallsZip(zipBtn));
+            inventoryBtn.addEventListener('click', () => downloadInventoryImage(inventoryBtn));
 
             // Config Modal
             document.getElementById('openConfigModalBtn').addEventListener('click', openConfigModal);

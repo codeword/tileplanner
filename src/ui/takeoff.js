@@ -74,6 +74,21 @@ export function setSavedWalls(walls) {
     scheduleRender();
 }
 
+// Every saved wall's counts, and the total pooled across them: sheets and tile balances are
+// summed and settled once, so one wall's spares and pulled-out tiles cover another's swaps.
+export function pooledTakeoff() {
+    const walls = savedWalls.map(w => ({ name: w.name, settings: w.settings, inv: countsFor(w.settings) }));
+    const sum = (key) => walls.reduce((n, w) => n + w.inv[key], 0);
+    return {
+        walls,
+        sheetsOnWalls: sum('totalSheets'),
+        swappedC1: sum('swappedC1'),
+        swappedC2: sum('swappedC2'),
+        c1: settleColor(sum('c1Sheets'), sum('balanceC1')),
+        c2: settleColor(sum('c2Sheets'), sum('balanceC2'))
+    };
+}
+
 function countsFor(settings) {
     if (!wallCounts.has(settings)) {
         wallCounts.set(settings, computeWall(normalizeState({ ...state, ...settings })).inventory);
@@ -105,32 +120,22 @@ const escapeHtml = (text) => text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0
 function renderSavedWallsList() {
     const list = document.getElementById('savedWallsList');
     linkedShownUnsaved = Boolean(linkedWall) && isUnsaved(state);
+    for (const id of ['exportWallsZipBtn', 'exportInventoryBtn']) {
+        const btn = document.getElementById(id);
+        if (btn.textContent.trim().endsWith('…')) continue; // an export is running
+        btn.disabled = savedWalls.length === 0;
+    }
     if (savedWalls.length === 0) {
         list.innerHTML = `<div class="text-[11px] text-slate-500 italic p-1">No additional walls saved.</div>`;
         return;
     }
 
     let html = '';
-    let aggSheets = 0;
-    let aggC1 = 0;
-    let aggC2 = 0;
-    let aggSwaps = 0;
-    let aggSwapsC1 = 0;
-    let aggSwapsC2 = 0;
-    let aggBalanceC1 = 0;
-    let aggBalanceC2 = 0;
+    const total = pooledTakeoff();
 
     savedWalls.forEach((w, idx) => {
-        const inv = countsFor(w.settings);
+        const inv = total.walls[idx].inv;
         const voidCount = w.settings.voids.filter(v => !v.measureOnly).length;
-        aggBalanceC1 += inv.balanceC1;
-        aggBalanceC2 += inv.balanceC2;
-        aggSheets += inv.totalSheets;
-        aggC1 += inv.c1Sheets;
-        aggC2 += inv.c2Sheets;
-        aggSwaps += inv.handSwaps;
-        aggSwapsC1 += inv.swappedC1;
-        aggSwapsC2 += inv.swappedC2;
 
         const linked = (w === linkedWall);
         const unsaved = linked && linkedShownUnsaved;
@@ -154,14 +159,12 @@ function renderSavedWallsList() {
         `;
     });
 
-    // Pooled across walls: one wall's spares and pulled-out tiles cover another's swaps
-    const c1 = settleColor(aggC1, aggBalanceC1);
-    const c2 = settleColor(aggC2, aggBalanceC2);
+    const { c1, c2 } = total;
     html += `
         <div class="pt-2 border-t border-slate-800 font-mono text-[11px] text-cyan-300">
             <div>Total Takeoff: ${c1.buy + c2.buy} sheets (${c1.buy} C1 + ${c2.buy} C2)</div>
-            <div class="text-slate-400">Leftover: ${c1.leftover} C1, ${c2.leftover} C2 tiles | ${aggSheets} sheets on walls</div>
-            <div class="text-amber-400 text-[10px]">Total Swaps: ${aggSwaps} (${aggSwapsC1} C1, ${aggSwapsC2} C2)</div>
+            <div class="text-slate-400">Leftover: ${c1.leftover} C1, ${c2.leftover} C2 tiles | ${total.sheetsOnWalls} sheets on walls</div>
+            <div class="text-amber-400 text-[10px]">Total Swaps: ${total.swappedC1 + total.swappedC2} (${total.swappedC1} C1, ${total.swappedC2} C2)</div>
         </div>
     `;
 

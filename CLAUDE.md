@@ -14,20 +14,23 @@ Web app for planning a tile wall built from Merola Tile "Metro Rhombus" mosaic s
 | `noise.js` | `hashScatter`, `hash2D`, `smoothNoise`, `mod` |
 | `fades.js` | `FADES` registry, `BOUNDARY_OCTAVES`, `getNormalizedZones`, `assignColors` |
 | `geometry.js` | `floorRowIndex`, `tileNumber`, `overrideKey`, wall/void clipping, `buildSheetGrid`, `markCutTiles`, `isPointInPolygon` |
-| `inventory.js` | `computeInventory` |
+| `inventory.js` | `computeInventory`, `settleColor` |
+| `inventory-image.js` | `drawInventoryImage`, `inventoryImageSize`, `withReserve` (saved-walls inventory PNG) |
+| `zip.js` | `makeZip` (stored-entry zip writer, no library) |
 | `state.js` | `DEFAULTS`, `LIMITS`, `normalizeState`, voids/overrides sanitizing, `WALL_KEYS` / `wallSettings`, `state`, `setState`, `onStateChange` |
 | `view.js` | `computeView`, `toScreen`, `toWall` |
 | `renderer.js` | `renderCanvas`, `drawSpecCard`, label helpers |
 | `config.js` | `configFromProject`, `projectFromConfig` (pure; any version → shared colors + saved walls + warnings), `sanitizeWallName` |
-| `app.js` | `computeWall` (grid → cut tiles → colors → inventory), render loop (`scheduleRender`, `renderTiling`, `last*`, `nav`), PNG export |
+| `app.js` | `computeWall` (grid → cut tiles → colors → inventory), render loop (`scheduleRender`, `renderTiling`, `last*`, `nav`), PNG export (`renderExportCanvas`, `canvasToBlob`, `downloadBlob`, `exportFileName`, `fileSafe`) |
 | `ui/canvases.js` | Plan and HUD canvases |
 | `ui/controls.js` | `syncControls`, `bindInputs`, void list |
 | `ui/pointer.js` | Click/drag/pan/zoom, cursor HUD |
-| `ui/takeoff.js` | Dashboard bar, saved walls (rename, drag reorder, `getSavedWalls` / `setSavedWalls`) |
+| `ui/takeoff.js` | Dashboard bar, saved walls (rename, drag reorder, `getSavedWalls` / `setSavedWalls`, `pooledTakeoff`) |
+| `ui/export.js` | Saved-walls zip export and inventory PNG download |
 | `ui/config-modal.js` | Config JSON modal |
 | `main.js` | Wires `onStateChange(syncControls)` and `onStateChange(scheduleRender)`, binds inputs, `window.planner` |
 
-The pipeline modules (`noise`, `fades`, `geometry`, `inventory`, `view`, `config`, `renderer`) don't touch the DOM or app state; `state.js` only depends on `fades` (for the algorithm list) and `geometry`. `app.js` ↔ `ui/pointer.js` and `app.js` ↔ `ui/takeoff.js` import each other, which is fine because neither uses the other at load time.
+The pipeline modules (`noise`, `fades`, `geometry`, `inventory`, `inventory-image`, `zip`, `view`, `config`, `renderer`) don't touch the DOM or app state; `state.js` only depends on `fades` (for the algorithm list) and `geometry`. `app.js` ↔ `ui/pointer.js` and `app.js` ↔ `ui/takeoff.js` import each other, which is fine because neither uses the other at load time.
 
 ## What it does
 - Sheet model: 10.5″ W × 12.13″ H, 3 cubes × 4 rows = 36 rhombus tiles per sheet. The order is in sheets (no boxes or waste factor).
@@ -104,7 +107,12 @@ From a feature audit written with Gemini, rebuilt on the state model. All coordi
 
 **Spec card** (`drawSpecCard`): wall name, wall/grid line, fade label and seed, sub-zones (top/transition/bottom % as used by `getNormalizedZones`, with the color in each band, rogue % and invert on/off), one row per color (swatch, hex, sheets to order, tiles left), swaps, spares and the order in sheets. The fade and zones lines pass `maxWidth` to `fillText` so rare long values squeeze instead of overflowing. It is laid out at 480×166 and scaled down uniformly to fit. The name is that of the linked saved wall, the one last saved, loaded or updated (`currentWall` in `ui/takeoff.js` returns `{ name, unsaved }` or null). Once the wall being edited differs from it in any `WALL_KEYS` value, an amber " (unsaved)" follows the name; with no linked wall the card shows a grey "Unsaved wall". Renaming updates the card. `renderCanvas` takes it as its last argument, so the PNG export includes it. `computeView` always places it in a strip added below the bottom margin, left-aligned with the content (`view.card`), never on the wall; its size is in CSS px, so zoom doesn't scale it.
 
-**PNG export**: the fitted plan at 4×. No × badges, HUD or drag preview. Sheet outlines/badges only if the overlay is on. Everything off the wall is transparent (`transparent = !view.onScreen` in `renderCanvas`: no canvas background, margin paint or wash), and in the clean mockup voids are cleared with `destination-out`. The card's own fill is 92% opaque. The file is named `<wall name>_<W>x<H>_<overlay|mockup>.png` (`exportFileName` in `app.js`): the linked saved wall's name (kept with unsaved changes) or `unsaved-wall`, made file-safe (runs of other characters → `-`).
+**PNG export**: the fitted plan at 4×. No × badges, HUD or drag preview. Sheet outlines/badges only if the overlay is on. Everything off the wall is transparent (`transparent = !view.onScreen` in `renderCanvas`: no canvas background, margin paint or wash), and in the clean mockup voids are cleared with `destination-out`. The card's own fill is 92% opaque. The file is named `<wall name>_<W>x<H>_<overlay|mockup>.png` (`exportFileName` in `app.js`): the linked saved wall's name (kept with unsaved changes) or `unsaved-wall`, made file-safe (`fileSafe`: runs of other characters → one `-`, so "Bathroom - Floor" → `Bathroom-Floor`; non-ASCII letters are dropped).
+
+**Saved-walls export** (`ui/export.js`; buttons under Saved Walls, disabled with no saved walls).
+- **Export ZIP** → `saved-walls_<YYYY-MM-DD>.zip`: for each saved wall, `<name>_<W>x<H>_overlay.png` and `_mockup.png` (rendered with `renderExportCanvas` from the wall's settings in the current shared colors, card named after the wall, no unsaved mark), plus `inventory.png`. Colliding names get `-2`, `-3`. `makeZip` stores entries uncompressed (PNGs are already compressed) with CRC-32 and UTF-8 names; checked with `unzip -t` and Python `zipfile`. Ten walls ≈ 30 MB.
+- **Inventory PNG** → `inventory_<YYYY-MM-DD>.png`, the same image on its own. `drawInventoryImage` (760 CSS px wide at 2×, dark like the spec card): date and colors; one row per wall (name, W × H (tiled), sheets on wall, sheets and leftover tiles per color, each wall settled on its own); the pooled total (`pooledTakeoff`, same numbers as the sidebar); and a reserve table with the pooled minimum, +5% and +10% per color and total (`withReserve`: ceil(min × (1 + level)) per color).
+- The current unsaved wall isn't included.
 
 **Clean mockup (Sheet Overlay off).** `renderCanvas` drops the planning marks: sheet outlines/badges, cut-tile ghosts, the outside-wall wash, red wall lines and labels, and void outlines, labels and × badges (`drawPlanningMarks` only runs with the overlay on, so `view.voidBadges` stays empty). Usable tiles are clipped to the wall, and voids (clipped to the wall) are filled with `CANVAS_BG` over them, so tiles show how they'd be cut. The margins are `CANVAS_BG` too, and the on-screen content border is skipped. The spec card stays. The PNG export follows the toggle.
 
