@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "/usr/local/opt/node@24/bin/npx",
+      "args": [
+        "-y",
+        "@playwright/mcp@0.0.83",
+        "--browser", "chrome",
+        "--isolated",
+        "--output-dir", ".playwright-mcp"
+      ],
+      "env": {
+        "PATH": "/usr/local/opt/node@24/bin:/usr/local/bin:/usr/bin:/bin"
+      }
+    }
+  }
+}

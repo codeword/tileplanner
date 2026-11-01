@@ -5,6 +5,8 @@ Web app for planning a tile wall built from Merola Tile "Metro Rhombus" mosaic s
 ## Working on it
 - **Edit `src/`, never `tile-planner.html`.** After changing `src/`, run `python3 build.py` (stdlib only, no Node needed) and commit both.
 - Develop by serving the repo (`python3 -m http.server`) and opening `/src/index.html`. Module files don't load from `file://`; the built file does, because its code is one inline `<script type="module">`.
+- Browser testing: `.mcp.json` runs the Playwright MCP server (`@playwright/mcp`, pinned) with Homebrew's `node@24` by full path, in installed Chrome with an isolated profile; output goes to `.playwright-mcp/` (ignored).
+- `src/configs/` holds exported config JSONs (e.g. `fullBathroom.json`, the real saved walls). Test with copies of these; never overwrite them from a test.
 - `build.py` concatenates modules in dependency order into one scope (drops imports, strips `export`). It fails on duplicate top-level names across modules and on names used from another module without an import (those work in the bundle but break `src/`; template-literal text is ignored by that check, `${}` expressions aren't). Only `export function|const|let|class` and `import { a, b } from './x.js'` are supported.
 
 ## Layout (`src/`)
